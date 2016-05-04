@@ -28,3 +28,27 @@ The implementation is (unsurprisingly for a hastily-written, unmaintained resear
 Unfortunately, because I've long since moved on to other projects, I cannot support this code or develop it further. Fork it, patch it, extend it: do whatever you like with it. It's here for the public good as an archive for future generations of developer tool developers. I'd love to see what you do with it! I love to hear stories about how people are building upon the work.
 
 That said, if you find that things are critically broken and can be fixed with some simple changes, submit a pull request. I'll review all requests eventually and merge them, so that others can continue to play with the code.
+
+## Running the Examples
+
+I've included several examples that demonstrate the various features of the language and UI toolkit. 
+
+There's a folder named "Citrus" with this release that has several folders in it named "images", "languages", and "styles". For now, the Citrus interpreter expects a folder named "Citrus" with these subfolders in it, relative to the execution path, so don't move them. A proper design would allow these "libraries" to be in an arbitrary location (like the Java SDKs on a Windows machine), or a default system location (like the Java SDKs on an OS X machine).
+
+Anyway, the "languages" folder has several folders that represent different applications and libraries. For example, the "ToDo" folder has the two .citrus files that have the source code for a simple to do editor. To run this ToDo app, from the directory that has the Citrus.jar file in it, you would type:
+
+	java -jar Citrus.jar Citrus/languages/ToDo/ToDoViews.citrus
+
+The ToDoViews.citrus file has an "init" at the top, which is like Java "main" method. Other folders, like HTML and Widgets, are just libraries, and don't have files with an init.
+
+## Understanding the Source
+
+If you're trying to understand all of the source code included here, here are a few major points:
+
+* The source is generally divided into two major parts: the package edu.cmu.hcii.citrus, which is the Citrus virtual machine, parser, etc., and edu.cmu.hcii.citrus.views, which is the Citrus user interface toolkit.
+
+* The major base classes amongst all of the source code include Element (the Citrus equivalent of Java's Object), Property (the Citrus equivalent of a Java Object's field, but with so much more), View (the Citrus equivalent of Swing's JComponent), and App (the Citrus equivalent of Swing's JFrame).
+
+## Writing Citrus code
+
+The best way to learn the syntax is either to read the parser code (edu.cmu.hcii.citrus.CitrusParser) or to look at the examples included in the Citrus/languages subdirectory. I haven't very well formalized the syntax, because it has been in a state of flux as I've been iterating on the language design.
