@@ -21,6 +21,8 @@ The best way to learn about the two projects is to read the two corresponding pu
 * [Citrus: A Language and Toolkit for Simplifying the Creation of Structured Editors for Code and Data](http://faculty.washington.edu/ajko/publications?id=citrus). Ko, A.J. and Myers, B.A. (2005). ACM Symposium on User Interface Software and Technology (UIST). A programming language and library with language-level support for constraints, restrictions and change notifications on primitive and aggregate data.
 * [Barista: An Implementation Framework for Enabling New Tools, Interaction Techniques and Views for Code Editors](http://faculty.washington.edu/ajko/publications?id=barista). Ko, A.J. and Myers, B.A. (2006). ACM Conference on Human Factors in Computing Systems (CHI), 387-396. Abstractions that make it easy to build rich multimedia interfaces in a code editor without sacrificing the ability to write code as text.
 
+The implementation is (unsurprisingly for a hastily-written, unmaintained research prototype) a bit of a mess. There are no tests, no build scripts, and not a lot of comments. Sorry :(
+
 ## Support
 
 Unfortunately, because I've long since moved on to other projects, I cannot support this code or develop it further. Fork it, patch it, extend it: do whatever you like with it. It's here for the public good as an archive for future generations of developer tool developers. I'd love to see what you do with it! I love to hear stories about how people are building upon the work.
