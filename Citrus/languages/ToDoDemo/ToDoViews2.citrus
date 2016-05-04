@@ -1,0 +1,29 @@
+language ToDoViews
+
+uses "ToDo"
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.layouts"
+
+#######################
+# Views
+#
+
+a ToDoItemView is a ElementView that
+
+	has ToDoItem model = ?
+
+	has Layout layout = (a HorizontalLayout spacing=10.0)
+	has Real width = 100.0
+	has Real height = 100.0
+	has Real scale = 1.0
+
+	has List<View> children = [
+		(a Checkbox0 property = model.@done) 
+		(a TextField1 property = model.@whatToDo)
+	]
+
+	a Checkbox0 is a Checkbox that.
+	a TextField1 is a TextField that.
+
+.

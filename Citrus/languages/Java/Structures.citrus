@@ -1,0 +1,1610 @@
+language Java
+
+uses "Barista"
+uses "HTML"
+
+
+######################
+# Base Classes
+######################
+
+a JavaElement is an abstract Structure that
+
+.
+
+# As opposed to a java token.
+a JavaStructure is an abstract JavaElement that.
+
+a ScopedElement is an abstract JavaElement that
+
+	has Text annotation = ""
+
+	# Constrained to the the scope returned by the element that owns this scoped element.
+	refs ScopedElement scope <- 
+		(do
+			has ScopedElement scopedOwner = (this ownerOfType ScopedElement)
+			(if (scopedOwner is nothing) nothing (scopedOwner getScopeFor this)))
+
+	# By default, it just passes its own scope to its children
+	fun Structure getScopeFor [ refs Element e ] scope
+
+	fun static Bool isTerminal [] false
+
+.
+
+an Executable is an abstract ScopedElement that
+
+.
+
+######################
+# Variable declarations
+######################
+
+a VariableDeclaration is an abstract ScopedElement that
+
+	has undoable JType type = (a ReferenceType)
+
+.
+
+# Used in for loops and parameter lists.
+a SingleVariableDeclaration is a VariableDeclaration that
+
+	has undoable Identifier name = (a Identifier)
+	has Final final = nothing
+
+	fun Text toText []
+		("" concat [ (if ((final is nothing) not) "final ") (type toText) " " (name toText) ])
+
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(an Optional expansion=(a NonTerminal property="final" type=Final))
+			(a NonTerminal property="type" type=JType)
+			(a NonTerminal property="name" type=JType)
+		])
+	
+.
+
+# Used only in ForStatements.
+a VariableDeclarationExpression is a VariableDeclaration that
+
+	has undoable List<VariableDeclarationFragment> fragments = []
+
+	fun Text toText [] ("" concat [
+		(type toText) " "
+		(fragments toFormattedText ", " false) 
+	])
+
+.
+
+# The part of a field declaration after the modifier and type.
+a VariableDeclarationFragment is a JavaStructure that
+
+	has undoable Identifier name = (a Identifier)
+	# Fragments always appear in a list owned by a scoped element with a type
+	# So this should always evaluate to something
+	has undoable JType type <- owner.owner.type
+	has undoable Equals equals = nothing
+	has undoable Expression initializer = nothing	
+
+	fun Text toText [] ("" concat [
+		(name toText) (if ((initializer is nothing) not) ((equals toText) cat (initializer toText)))
+	])
+	
+	fun static bool isTerminal [] false
+	has static Expansion grammar = 
+		(a Production type=VariableDeclarationFragment expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="name" type=Identifier)
+#				(a ZeroOrMore expansion=
+#					(a Sequence
+#						(a NonTerminal property="name" type=LeftBracket)
+#						(a NonTerminal property="name" type=RightBracket)))
+				(an Optional expansion=
+					(a Sequence expansions=[
+						(a NonTerminal property="equals" type=Equals)
+						(a NonTerminal property="initializer" type=Expression)
+					]))
+			])
+		)
+
+	fun static Production getAbstractGrammar [] VariableDeclarationFragment.grammar
+.
+
+
+a Local is a Statement that
+
+	has undoable Final final = nothing
+	has undoable JType type = (a ReferenceType)
+	has undoable List<VariableDeclarationFragment> fragments = []
+	has undoable SemiColon semicolon = (a SemiColon)
+
+	fun Text toText [] 
+		("" + (if ((final is nothing) not) (final toText)) (type toText) " " (fragments toFormattedText ", " false) (semicolon toText))
+	
+	has static Expansion grammar = 
+		(a Production type=Local expansion=
+			(a Sequence expansions=[
+				(a Optional expansion=(a NonTerminal property="final" type=Final))
+				(a NonTerminal property="type" type=JType)
+				(a OneOrMore expansion=(a NonTerminal property="fragments" type=VariableDeclarationFragment))
+				(a NonTerminal property="semicolon" type=SemiColon)
+			])
+		)
+
+.
+
+######################
+# Literals
+######################
+
+a ClassLiteral is an Expression that
+
+	has undoable JType type = nothing
+
+	fun Text toText [] ((type toText) + ".class")
+.
+
+######################
+# Expressions
+######################
+
+############	Expression precedence table	###############
+# 1 [ ] () (method call) .							(left to right)
+# 2 ++ (post) -- (post) 							(right to left)
+# 3 ++ (pre) -- (pre) + - ~ ! (typecast) new	(right to left)
+# 4 * / % 												(left to right)
+# 5 + - stringcat										(left to right)
+# 6 << >> >>>											(left to right)
+# 7 < <= > >= instanceof							(left to right)
+# 8 == !=												(left to right)
+# 9 &														(left to right)
+# 10 ^													(left to right)
+# 11 |													(left to right)
+# 12 &&													(left to right)
+# 13 ||													(left to right)
+# 14 ? :													(right to left)
+# 15 = += *= /= -= %= <<= >>= >>>= &= ^= |=	(right to left)
+
+an Expression is an abstract Executable that
+
+	fun Expression getExpressionRoot []
+		(if ((this ownerOfType Structure) isa Expression) ((this ownerOfType Structure) getExpressionRoot) this)
+
+	fun static Production getAbstractGrammar [] Expression.grammar
+
+	has static Expansion grammar = 
+		(a NonTerminal type=Assignment)
+
+.
+
+an ExpressionWithAlternatives is an Expression that
+
+	has undoable List<Alternative> exclusions
+	has undoable Expression alternative
+	
+.
+
+an Alternative is an Element that
+
+	has Structure expr = ?
+	
+.
+
+# An assignment or infix expression
+an Infix is an abstract Expression that
+
+	has undoable Expression left = (a Identifier)
+	has undoable Operator operator = nothing
+	has undoable Expression right = (a Identifier)
+
+	fun Text toText [] ("(" + (left toText) " " (operator toText) " " (right toText) ")")
+
+.
+
+an Assignment is an Infix that
+
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="left" assign=false type=LogicalOR)
+			(a ZeroOrMore expansion=
+				(a Sequence expansions=[
+					(a NonTerminal property="operator" assign=false type=AssignmentOperator)
+					(a NonTerminal property="right" assign=false type=LogicalOR)
+				])
+			)
+		])
+			 
+
+.
+
+a LogicalOR is an Infix that
+
+	has undoable LogicalOROperator operator = (a LogicalOROperator)
+
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="left" assign=false type=LogicalAND)
+			(a ZeroOrMore expansion=
+				(a Sequence expansions=[
+					(a NonTerminal property="operator" assign=false type=LogicalOROperator)
+					(a NonTerminal property="right" assign=false type=LogicalAND)
+				])
+			)
+		])
+
+.
+
+a LogicalAND is an Infix that
+
+	has undoable LogicalANDOperator operator = (a LogicalANDOperator)
+
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="left" assign=false type=BitwiseOR)
+			(a ZeroOrMore expansion=
+				(a Sequence expansions=[
+					(a NonTerminal property="operator" assign=false type=BitwiseOROperator)
+					(a NonTerminal property="right" assign=false type=BitwiseOR)
+				])
+			)
+		])
+
+.
+
+a BitwiseOR is an Infix that
+
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="left" assign=false type=BitwiseAND)
+			(a ZeroOrMore expansion=
+				(a Sequence expansions=[
+					(a NonTerminal property="operator" assign=false type=BitwiseOROperator)
+					(a NonTerminal property="right" assign=false type=BitwiseAND)
+				])
+			)
+		])
+
+.
+
+a BitwiseAND is an Infix that
+
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="left" assign=false type=Equality)
+			(a ZeroOrMore expansion=
+				(a Sequence expansions=[
+					(a NonTerminal property="operator" assign=false type=BitwiseANDOperator)
+					(a NonTerminal property="right" assign=false type=Equality)
+				])
+			)
+		])
+
+.
+
+a Equality is an Infix that
+
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="left" assign=false type=Inequality)
+			(a ZeroOrMore expansion=
+				(a Sequence expansions=[
+					(a NonTerminal property="operator" assign=false type=EqualityOperator)
+					(a NonTerminal property="right" assign=false type=Inequality)
+				])
+			)
+		])
+
+.
+
+a Inequality is an Infix that
+
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="left" assign=false type=Bitshift)
+			(a ZeroOrMore expansion=
+				(a Sequence expansions=[
+					(a NonTerminal property="operator"assign=false type=InequalityOperator)
+					(a NonTerminal property="right" assign=false type=Bitshift)
+				])
+			)
+		])
+
+.
+
+a LessThan is an Inequality that
+
+	has undoable Operator operator = (a LessThanOperator)
+.
+
+a Bitshift is an Infix that
+
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="left" assign=false type=Additive)
+			(a ZeroOrMore expansion=
+				(a Sequence 
+					expansions=[
+						(a NonTerminal property="operator" assign=false type=BitshiftOperator)
+						(a NonTerminal property="right" assign=false  type=Additive)
+					]
+					after=(fun [ refs ParseAction action ]
+						(action pushStructure 
+							(an Bitshift right=(action popStructure) operator=(action popStructure) left=(action popStructure))))
+				)
+			)
+		])
+
+.
+
+a Additive is an Infix that
+
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="left" assign=false type=Multiplicative)
+			(a ZeroOrMore expansion=
+				(a Sequence 
+					expansions=[
+						(a NonTerminal property="operator" assign=false type=AdditiveOperator)
+						(a NonTerminal property="right" assign=false type=Multiplicative)
+					]
+					after=(fun [ refs ParseAction action ]
+						(action pushStructure 
+							(an Additive right=(action popStructure) operator=(action popStructure) left=(action popStructure))))
+				)
+			)
+		])
+
+.
+
+an Addition is an Additive that
+
+	has PlusOperator operator = (a PlusOperator)
+.
+
+a Subtraction is an Additive that
+
+	has MinusOperator operator = (a MinusOperator)
+.
+
+a Multiplicative is an Infix that
+
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="left" assign=false type=Prefix)
+			(a ZeroOrMore expansion=
+				(a Sequence 
+					expansions=[
+						(a NonTerminal property="operator" assign=false type=MultiplicativeOperator)
+						(a NonTerminal property="right" assign=false type=Prefix)
+					]
+					after=(fun [ refs ParseAction action ]
+						(action pushStructure 
+							(an Multiplicative right=(action popStructure) operator=(action popStructure) left=(action popStructure))))
+				)
+			)
+		])
+
+.
+
+a Division is a Multiplicative that
+
+	has Divide operator = (a DivideOperator)
+
+.
+
+a Prefix is an abstract Expression that
+
+	has static Expansion grammar =
+		(a Choice expansions=[
+			(a NonTerminal type=PrefixIncDec)
+			(a NonTerminal type=Negate)
+			(a NonTerminal type=Cast)
+			(a NonTerminal type=New)
+			(a NonTerminal type=Primary)
+		])
+
+.
+
+a PrefixIncDec is a Prefix that
+
+	has undoable IncDecOperator op
+	has undoable Expression expr
+
+	has static Expansion grammar = 
+		(a Production type=PrefixIncDec expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="op" type=IncDecOperator)
+				(a NonTerminal property="expr" type=Primary)
+			])
+		)
+
+.
+
+# [+|-] expression
+a Negate is a Prefix that
+
+	has undoable NegationOperator op
+	has undoable Expression expr
+
+	has static Expansion grammar = 
+		(a Production type=Negate expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="op" type=NegationOperator)
+				(a NonTerminal property="expr" type=Primary)
+			])
+		)
+
+.
+
+
+a Cast is a Prefix that
+
+	has undoable LeftParenthesis left = (a LeftParenthesis)
+	has undoable JType type = (a ReferenceType)
+	has undoable RightParenthesis right = (a RightParenthesis)
+	has undoable Expression expr
+
+	fun Text toText [] ("(" concat [ (type toText) ")" (expr toText) ])
+		
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="left" type=LeftParenthesis)
+			(a NonTerminal property="type" type=JType)
+			(a NonTerminal property="right" type=RightParenthesis)
+			(a NonTerminal property="expr" type=Expression)
+		])
+
+.
+
+a New is an Prefix that
+
+	has undoable Expression prefix = nothing
+	has undoable NewKeyword newKeyword = (a NewKeyword)
+	has undoable Type type = (a ReferenceType)
+	has undoable List<JType> typeArguments = []
+	has undoable LeftParenthesis left = (a LeftParenthesis)
+	has undoable List<Expression> arguments = []
+	has undoable RightParenthesis right = (a RightParenthesis)
+	has undoable BodyDeclarations body = (a BodyDeclarations)
+
+	fun Text toText [] ("" concat [
+		"new " (type toText) "(" (arguments toFormattedText ", " false) ")"
+	])
+
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="keyword" type=NewKeyword)
+			(a NonTerminal property="type" type=JType)
+			(a NonTerminal property="left" type=LeftParenthesis)
+			(a ZeroOrMore expansion=(a NonTerminal property="arguments" type=Expression))
+			(a NonTerminal property="right" type=RightParenthesis)
+		])
+
+.
+
+
+a Postfix is an Expression that
+
+	has undoable Expression left = (a Identifier)
+	has undoable PostfixOperator operator = nothing
+
+
+
+.
+
+a Conditional is an Expression that
+	
+.
+
+
+an InstanceOf is an Expression that
+
+.
+
+a Primary is an abstract Expression that
+
+	has static Expansion grammar =
+		(a Sequence expansions=[
+			# Must handle, in this order
+			#		literals
+			#		this
+			#		super
+			#		( ) parentheses
+			# 		new Type()
+			#		Blah.class
+			#		identifier
+			#
+			(a Choice expansions=[
+				(a NonTerminal type=Identifier)
+				(a NonTerminal type=Literal)
+				(a NonTerminal type=ParenthesizedExpression)
+				(a NonTerminal type=New)
+			])
+			# Must handle, in this order
+			#		blah.this
+			#		blah.super
+			#		Blah.class.new Blah(...)
+			#		field access (blah.blah)
+			#		array access []
+			#		.identifier
+			(a ZeroOrMore expansion=
+				(a Choice expansions=[
+					(a NonTerminal type=MethodInvocation)
+					#(a NonTerminal type=ArrayAccess)
+					(a NonTerminal type=FieldAccess)
+				])
+			)
+		])
+
+.
+
+a FieldAccess is a Primary that
+
+	has undoable Expression expr = (a Identifier)
+	has undoable Dot dot = (a Dot)
+	has undoable Identifier name = (a Identifier)
+
+	has static Expansion grammar =
+		(a Production type=FieldAccess expansion=
+			(a Sequence expansions=[
+				(a NonTerminal lookahead=(a NonTerminal type=Dot) property="expr" type=Expression)
+				(a NonTerminal property="dot" type=Dot)
+				(a NonTerminal property="name" type=Identifier)
+			])
+		)
+
+.
+
+a SuperFieldAccess is an Expression that.
+
+a ParenthesizedExpression is a Primary that
+
+	has undoable LeftParenthesis left = (a LeftParenthesis)
+	has undoable Expression expr = (a Identifier)
+	has undoable RightParenthesis right = (a RightParenthesis)
+
+	fun Text toText [] ("(" + (expr toText) ")")
+
+	has static Expansion grammar =
+		(a Production type=ParenthesizedExpression expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="left" type=LeftParenthesis)
+				(a NonTerminal property="expr" type=Expression)
+				(a NonTerminal property="right" type=RightParenthesis)
+			])
+		)
+
+.
+
+a MethodInvocation is a Primary that
+
+	has undoable Expression expr = nothing
+	has undoable Dot dot = (a Dot)
+	has undoable Identifier name = (a Identifier)
+	has undoable LeftParenthesis left = (a LeftParenthesis)
+	has undoable List<Expression> arguments = []
+	has undoable RightParenthesis right = (a RightParenthesis)
+
+	fun Text toText [] ("" concat [ 
+		(if (expr is nothing) "" ((expr toText) concat [ "." ]))
+		(name toText)
+		(left toText) (arguments toFormattedText ", " false) (right toText)
+	])
+
+	has static Expansion grammar =
+		(a Production type=MethodInvocation expansion=
+			(a Sequence expansions=[
+				(an Optional expansion=
+					(a Sequence expansions=[
+						(a NonTerminal property="expr" type=Expression)
+						(a NonTerminal property="dot" type=Dot)
+					]))
+				(a NonTerminal property="name" type=Identifier)
+				(a NonTerminal property="left" type=LeftParenthesis)
+				(a ZeroOrMore expansion=(a NonTerminal property="arguments" type=Expression))
+				(a NonTerminal property="right" type=RightParenthesis)
+			])
+		)
+
+.
+
+a Access is an Expression that.
+a ArrayAccess is an Primary that.
+
+
+an ArrayCreation is an Expression that.
+
+an ArrayInitializer is an Expression that
+
+	has undoable LeftBrace left = (a LeftBrace)
+	has undoable List<Expression> values = []
+	has undoable RightBrace right = (a RightBrace)
+
+	fun Text toText [] ("{\n" + (values toFormattedText ",\n" false) "\n}")
+	
+	has static Expansion grammar = 
+		(a Sequence expansions=[
+			(a NonTerminal property="left" type=LeftBrace)
+			(a ZeroOrMore expansion=(a NonTerminal property="values" type=Expression))
+			(a NonTerminal property="right" type=RightBrace)
+		])
+
+.
+
+######################
+# Names
+######################
+
+a Name is an abstract Expression that
+
+	fun static Production getAbstractGrammar [] Name.grammar
+	fun static bool isTerminal [] false
+	has static Expansion grammar =
+		(a Choice expansions=[
+			(a NonTerminal 
+				lookahead=(a Sequence expansions=[(a NonTerminal type=Identifier) (a NonTerminal type=Dot)])
+				type=QualifiedName)
+			(a NonTerminal type=Identifier)
+		])
+
+.
+
+# Can be used as a field access, as a field access can be used as a qualified name.
+a QualifiedName is a Name that
+
+	has undoable Identifier qualifier = (a Identifier)
+	has undoable Dot dot = (a Dot)
+	has undoable Identifier name = (a Identifier)
+	
+	fun Text toText [] ((qualifier toText) + (dot toText) (name toText))
+	fun Structure getScopeFor [has Element e]
+		(if (e is nothing) nothing
+			(if (e is qualifier) scope 
+				(if (qualifier is nothing) 
+					nothing
+					qualifier.binding)))
+					
+	has static Expansion grammar =
+		(a Sequence expansions=[
+			(a NonTerminal property="qualifier" type=Name)
+			(a NonTerminal property="dot" type=Dot)
+			(a NonTerminal property="name" type=Identifier)
+		])
+	
+.
+
+######################
+# Statements
+######################
+
+a Statement is an abstract Executable that
+
+	has static Expansion grammar = 
+		(a Choice expansions=[
+			(a NonTerminal type=Block)
+			(a NonTerminal type=If)
+			(a NonTerminal type=For)
+			(a NonTerminal type=While)
+			(a NonTerminal type=Do)
+#			(a NonTerminal type=Try)
+#			(a NonTerminal type=Switch)
+#			(a NonTerminal type=Synchronized)
+			(a NonTerminal type=Return)
+#			(a NonTerminal type=Throw)
+			(a NonTerminal type=Break)
+			(a NonTerminal type=Continue)
+			(a NonTerminal type=EmptyStatement)
+			(a NonTerminal type=ExpressionStatement)
+#			(a NonTerminal type=LabeledStatement)
+#			(a NonTerminal type=Assert)
+			(a NonTerminal type=Local)
+#			(a NonTerminal type=TypeDeclarationStatement)
+#			(a NonTerminal type=ConstructorInvocation)
+#			(a NonTerminal type=SuperConstructorInvocation) 
+		])
+
+	fun static Production getAbstractGrammar [] Statement.grammar
+
+.
+
+an EmptyStatement is a Statement that
+
+	has undoable SemiColon semicolon = (a SemiColon)
+
+	fun Text toText [] (semicolon toText)
+	
+	has static Expansion grammar = 
+		(a NonTerminal property="semicolon" type=SemiColon)
+
+.
+
+a LabeledStatement is a Statement that.
+
+a Block is a Statement that
+
+	has undoable LeftBrace left = (a LeftBrace)
+	has undoable List<Statement> statements = []
+	has undoable RightBrace right = (a RightBrace)
+
+	fun Text toText [] ((left toText) + "\n" (statements toFormattedText "\n" true) (right toText))
+
+	has static Expansion grammar = 
+		(a Production type=Block expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="left" type=LeftBrace)
+				(a ZeroOrMore expansion=(a NonTerminal property="statements" type=Statement))
+				(a NonTerminal property="right" type=RightBrace)
+			])
+		)
+	
+.
+
+an If is a Statement that
+
+	has undoable IfKeyword keyword = (an IfKeyword)
+	has undoable LeftParenthesis left = (a LeftParenthesis)
+	has undoable Expression condition = (a Identifier)
+	has undoable RightParenthesis right = (a RightParenthesis)
+	has undoable Statement then = (an EmptyStatement)
+	has undoable ElseKeyword elseKeyword = (an ElseKeyword)
+	has undoable Statement else = nothing
+
+	refs If root <- (if (owner isa If) owner.root this)
+
+	fun Text toText [] ("" concat [ 
+		"if(" (condition toText) ") " 
+		(then toText) 
+		(if (else is nothing) "" ("" concat ["\n" "else " (else toText) ]))
+	])
+
+	has static Expansion grammar = 
+		(a Production type=If expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="keyword" type=IfKeyword)
+				(a NonTerminal property="left" type=LeftParenthesis)
+				(a NonTerminal property="condition" type=Expression)
+				(a NonTerminal property="right" type=RightParenthesis)
+				(an Optional expansion=
+					(a Sequence expansions=[
+						(a NonTerminal property="elseKeyword" type=ElseKeyword)
+						(a NonTerminal property="else" type=Statement)
+					]))
+			])
+		)
+
+.
+
+a While is a Statement that
+
+	has undoable WhileKeyword keyword = (a WhileKeyword)
+	has undoable LeftParenthesis left = (a LeftParenthesis)
+	has undoable Expression condition = (a Identifier)
+	has undoable RightParenthesis right = (a RightParenthesis)
+	has undoable Statement body = (an EmptyStatement)
+	
+	has static Expansion grammar = 
+		(a Production type=While expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="keyword" type=WhileKeyword)
+				(a NonTerminal property="left" type=LeftParenthesis)
+				(a NonTerminal property="condition" type=Expression)
+				(a NonTerminal property="right" type=RightParenthesis)
+				(a NonTerminal property="body" type=Statement)
+			])
+		)
+	
+.
+
+a For is a Statement that
+
+	has undoable ForKeyword keyword = (a ForKeyword)
+	has undoable LeftParenthesis left = (a LeftParenthesis)
+	has undoable SingleVariableDeclaration var = nothing
+	has undoable VariableDeclarationExpression init = (a VariableDeclarationExpression)
+	has undoable SemiColon semicolonAfterInit = (a SemiColon)	
+	has undoable Expression condition = (a Identifier)
+	has undoable SemiColon semicolonAfterCondition = (a SemiColon)	
+	has undoable List<Expression> update = []
+	has undoable RightParenthesis right = (a RightParenthesis)
+	has undoable Statement body = (an EmptyStatement)
+
+	fun Text toText [] ("" +
+		(keyword toText) (left toText)
+		(var toText) (init toText ) (semicolonAfterInit toText)
+		(condition toText) (semicolonAfterCondition toText)
+		(update toFormattedText ", " false) (right toText) 
+		(body toText) 
+	)
+
+	has static Expansion grammar = 
+		(a Production type=For expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="keyword" type=ForKeyword)
+				(a NonTerminal property="left" type=LeftParenthesis)
+				(a NonTerminal property="right" type=RightParenthesis)
+				(a NonTerminal property="body" type=Statement)
+			])
+		)
+
+.
+
+an EnhancedFor is a Statement that
+
+	has undoable SingleVariableDeclaration var = (a SingleVariableDeclaration)
+	has undoable Expression iterable = (a Identifier)
+	has undoable Statement body = (an EmptyStatement)
+
+	fun Text toText [] ("for(" concat [ (var toText) " : " (iterable toText) ") " (body toText) ])
+
+.
+
+an Assert is a Statement that.
+
+a Break is a Statement that
+
+	has undoable Text label = ""
+
+	fun Text toText [] ("break " concat [ label ";" ])
+
+	has static Expansion grammar = 
+		(a Production type=Break expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="keyword" type=BreakKeyword)
+				(a NonTerminal property="semicolon" type=SemiColon)
+			])
+		)
+
+.
+
+a Continue is a Statement that
+
+	has undoable Text label = ""
+	fun Text toText [] ("continue" concat [ label ";" ])
+
+	has static Expansion grammar = 
+		(a Production type=Continue expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="keyword" type=ContinueKeyword)
+				(a NonTerminal property="semicolon" type=SemiColon)
+			])
+		)
+.
+
+a Do is a Statement that
+
+	has static Expansion grammar = 
+		(an Production type=While expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="keyword" type=DoKeyword)
+				(a NonTerminal property="body" type=Statement)
+				(a NonTerminal property="left" type=LeftParenthesis)
+				(a NonTerminal property="condition" type=Expression)
+				(a NonTerminal property="right" type=RightParenthesis)
+			])
+		)
+
+.
+
+an ExpressionStatement is a Statement that
+
+	has undoable Expression expr = (a Identifier)
+	has undoable SemiColon semicolon = (a SemiColon)
+
+	fun Text toText [] ((expr toText) + (semicolon toText))
+
+	has static Expansion grammar = 
+		(an Production type=ExpressionStatement expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="expr" type=Expression)
+				(a NonTerminal property="semicolon" type=SemiColon)
+			])
+		)
+		
+.
+
+a Return is a Statement that
+
+	has undoable ReturnKeyword return = (a ReturnKeyword)
+	has undoable Expression expr = nothing
+	has undoable SemiColon semicolon = (a SemiColon)
+
+	fun Text toText [] ((return toText) + (if (expr is nothing) "" (expr toText)) (semicolon toText))
+
+	has static Expansion grammar = 
+		(an Production type=Return expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="return" type=ReturnKeyword)
+				(an Optional expansion=(a NonTerminal property="expr" type=Expression))
+				(a NonTerminal property="semicolon" type=SemiColon)
+			])
+		)
+
+.
+
+a ConstructorInvocation is a Statement that
+
+	has undoable List<Expression> arguments = []
+	has undoable List<Type> typeArguments = []
+
+.
+
+a SuperConstructorInvocation is a Statement that
+
+	has undoable List<Expression> arguments = []
+	has undoable List<Type> typeArguments = []
+	has undoable Expression expr = nothing
+.
+
+a Switch is a Statement that.
+a SwitchCase is a Statement that.
+a SynchronizedBlock is a Statement that.
+a Throw is a Statement that.
+
+a Try is a Statement that
+
+	has undoable Block try = (a Block)
+	has undoable List<Catch> catches = []
+	has undoable Block finally = (a Block)
+
+	fun Text toText [] ("" concat [
+		"try " (try toText) "\n"
+		(catches toFormattedText "\n" true) 
+		(if (finally is nothing) ""
+			("" concat [ "finally " (finally toText) ]))
+	])
+.
+
+a Catch is a Statement that
+
+	has undoable SingleVariableDeclaration exception
+	has undoable Block body = (a Block)
+
+	fun Text toText [] ("" concat [
+		"catch(" (exception toText) ") " (body toText)
+	])
+.
+
+a TypeDeclarationStatement is a Statement that.
+
+######################################
+# Declarations and Miscellaneous Types
+######################################
+
+an Environment is a Structure that
+
+	has Dictionary<Text Package> packages = (a Dictionary)
+	has Set<Project> projects = {}
+
+	fun Package resolvePackage [has Text name] (packages get name)
+	
+.
+
+a Project is a JavaElement that
+
+	has undoable Text name = "untitled"
+
+	has Set<Package> packages = {}
+.
+
+a Package is a JavaElement that
+
+	has Set<Document> files = {}
+	has Dictionary<Text TypeDeclaration> classes = (a Dictionary)
+	has Dictionary<Text Package> packages = (a Dictionary)
+	has Text name = ""
+
+	fun JType resolveType [has Text name] (classes get name) 
+	
+	# Go through each compilation unit and add its visible types
+	fun Set<JType> gatherTypes [has Set types]
+		(classes foreachValue (fun [has TypeDeclaration t] (types add t)))
+
+	fun Package resolvePackage [has Text name] (packages get name)
+
+	fun Set<Package> gatherPackages [has Set packagesSet]
+	(do
+		(packages foreachValue (fun [has Package p] (packagesSet add p)))
+		packagesSet
+	)
+.
+
+an Document is a ScopedElement that
+
+	has undoable Text name = "blah"
+	has undoable Unit unit = (a CompilationUnit)
+
+	fun Structure structureDirectionOf [ refs Bool direction ] nothing
+	fun static Bool isRoot [] true
+
+	has static Expansion grammar =
+		(a NonTerminal property="unit" type=CompilationUnit)
+
+.
+
+a Unit is an abstract ScopedElement that
+
+	refs Environment environment <- (this ownerOfType Environment)
+
+	# A compilation unit offers itself as the scope.
+	fun Structure getScopeFor [has Element e] this
+
+	# A compilation unit resolves names by searching amongst its types and then its imported types.
+	fun JType resolveType [has Text name]
+		(let	[has TypeDeclaration declaration = 
+					(types itemThat 
+						(fun [has TypeDeclaration dec] (do 
+							(("checking for type named " cat name) print) 
+							(dec.name.token isEquivalentTo name)
+						))
+					)
+				]
+			# If we didn't find it in this file, we search in this package.
+#			(if (declaration is nothing)
+#				(if (environment is nothing) 
+#					nothing
+#					(((environment resolvePackage "java") resolvePackage "lang") resolveType name)
+#				)
+			declaration
+#			)
+			# If we didn't find it in this package, we search the imports
+			
+			# If we didn't find it in the imports, we search java.lang
+		)
+
+	# Gather types defined in this unit, types imported
+	fun Set<JType> gatherTypes [has Set typesSet]
+	(do
+		(typesSet addItems types)
+#		(if ((environment is nothing) not)
+#			(((environment resolvePackage "java") resolvePackage "lang").classes foreachValue
+#				(fun [has TypeDeclaration t] (typesSet add t))))
+		typesSet
+	)
+
+	fun Package resolvePackage [has Text name]
+		(cond
+			(environment is nothing) nothing 
+			(environment is this) nothing
+			(environment resolvePackage name)
+		)
+	
+	fun Set<Package> gatherPackages [has Set packages]
+	(do
+		((this ownerOfType Environment).packages foreachValue (fun [has Package p] (packages add p)))
+		packages
+	)
+
+	fun Text toText [] ("" concat [
+		(if (package is nothing) "" (package toText)) 
+		"\n"
+		(imports toFormattedText "\n" true) 
+		"\n"
+		(types toFormattedText "\n" true)
+	])
+
+	fun static bool isTerminal [] false
+	fun static Production getAbstractGrammar [] Unit.grammar
+	has static Expansion grammar =
+		(a Choice expansions=[
+			(a NonTerminal type=CompilationUnit)
+			(a NonTerminal type=UnparsableUnit)
+		])
+
+.
+
+a CompilationUnit is a Unit that
+
+	has LeadingWhitespace whitespace = (a LeadingWhitespace)
+	has undoable PackageDeclaration package = nothing
+	has undoable List<Import> imports = []
+	has undoable List<TypeDeclaration> declarations = []
+	
+	has static Expansion grammar =
+		(a Production type=CompilationUnit expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="whitespace" type=LeadingWhitespace)
+				(an Optional expansion=(a NonTerminal property="package" type=PackageDeclaration))
+				(a ZeroOrMore expansion=(a NonTerminal property="imports" type=Import))
+				(a ZeroOrMore expansion=(a NonTerminal property="declarations" type=TypeDeclaration))
+			])
+		)
+	
+.
+
+an UnparsableUnit is a Unit that
+
+	has undoable List<JavaElement> tokens = []
+	
+	# A list of anything, preserving all structure.
+	fun static Bool isErroneous [] true
+	has static Expansion grammar = 
+		(a Production type=UnparsableUnit expansion=
+			(a OneOrMore expansion=(a NonTerminal property="tokens" type=JavaElement))
+		)
+
+	fun Text toText [] (tokens toText)
+
+.
+
+a PackageDeclaration is an ScopedElement that
+
+	has undoable PackageKeyword keyword = (a PackageKeyword)
+	has undoable Identifier name = (an Identifier)
+	has undoable SemiColon semicolon = (an SemiColon)
+
+	fun Text toText [] ((keyword toText) + (name toText) (semicolon toText))
+
+	# A package declaration offers the compilation unit that owns it as the scope.
+	fun Structure getScopeFor [has Element e] (this ownerOfType CompilationUnit)
+
+	fun static bool isTerminal [] false
+	fun static Production getAbstractGrammar [] PackageDeclaration.abstractGrammar
+	has static Expansion abstractGrammar = (a NonTerminal type=PackageDeclaration)
+	has static Expansion grammar =
+		(a Production type=PackageDeclaration expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="keyword" type=PackageKeyword)
+				(a NonTerminal property="name" type=Name)
+				(a NonTerminal property="semicolon" type=SemiColon)
+			])
+		)
+
+.
+
+an Import is a JavaStructure that
+
+	# This points to either a package or a qualified type name
+	has undoable ImportKeyword keyword = (an ImportKeyword)
+	has undoable Static static	= nothing
+	has undoable Name name = (a Identifier)
+	has undoable Dot dot = nothing
+	has undoable MultiplicativeOperator star = nothing
+	has undoable SemiColon semicolon = (a SemiColon)
+
+	fun Text toText [] ((keyword toText) + (if static is nothing "" (static toText)) (name toText) (if (star is nothing) "" ((dot toText) + (star toText))))
+	
+	# Get the package that the package reference resolves to and 
+	# search for a type of this name.
+	fun JType resolveType [has Text name] nothing
+	
+	# Add all of the types imported by this statement
+	fun Set<JType> gatherTypes [has Set types] 
+		(if (name.binding is nothing) types
+			(if onDemand (name.binding gatherTypes types)
+				(types add name.binding)
+			)
+		)
+
+	fun static bool isTerminal [] false
+	has static Expansion grammar =
+		(a Production type=Import expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="keyword" type=ImportKeyword)
+				(an Optional expansion=(a NonTerminal property="static" type=Static))
+				(a NonTerminal property="name" type=Name)
+				(an Optional expansion=
+					(a Sequence expansions=[
+						(a NonTerminal property="dot" type=Dot)
+						(a NonTerminal property="star" type=MultiplicativeOperator)
+					])
+				)
+				(a NonTerminal property="semicolon" type=SemiColon)
+			])
+		)
+
+	fun static Production getAbstractGrammar [] Import.grammar
+
+.
+
+a Modifiers is a JavaStructure that
+
+	has List<Modifier> modifiers = []
+	
+	fun Text toText [] (modifiers toFormattedText " " true)
+
+	fun static bool isTerminal [] false
+	has static Expansion grammar =
+		(a Production type=Modifiers expansion=
+			(a ZeroOrMore expansion=
+				(a Choice expansions=[
+					(a NonTerminal property="modifiers" type=Public)
+					(a NonTerminal property="modifiers" type=Private)
+					(a NonTerminal property="modifiers" type=Protected)
+					(a NonTerminal property="modifiers" type=Abstract)
+					(a NonTerminal property="modifiers" type=Static)
+					(a NonTerminal property="modifiers" type=Final)
+					(a NonTerminal property="modifiers" type=Volatile)
+					(a NonTerminal property="modifiers" type=Native)
+					(a NonTerminal property="modifiers" type=StrictFP)
+				])
+			)
+		)
+
+	fun static Production getAbstractGrammar [] Modifiers.grammar
+
+.
+
+a BodyDeclaration is an abstract ScopedElement that
+
+	has static Expansion grammar = 
+		(a Choice expansions=[
+			(a NonTerminal type=Class)
+			(a NonTerminal type=Method)
+			(a NonTerminal type=Field)
+#			(a NonTerminal type=Interface)
+#			(a NonTerminal type=Enum)
+			(a NonTerminal type=UnparsableBodyDeclaration)
+		])
+
+	fun static Production getAbstractGrammar [] BodyDeclaration.grammar
+	
+.
+
+an UnparsableBodyDeclaration is a BodyDeclaration that
+
+	has undoable List<JavaElement> tokens = []
+	
+	# A list of structures and other tokens, other than a right brace
+	fun static Bool isErroneous [] true
+	has static Expansion grammar = 
+		(a Production type=UnparsableBodyDeclaration expansion=
+			(a OneOrMore expansion=
+				(a Choice expansions=[
+					(a NonTerminal property="tokens" type=JavaStructure)
+					(a NonTerminal property="tokens" type=Identifier)
+					(a NonTerminal property="tokens" type=Literal)
+					(a NonTerminal property="tokens" type=Keyword)
+					(a NonTerminal property="tokens" type=Primitive)
+					(a NonTerminal property="tokens" type=LeftParenthesis)
+					(a NonTerminal property="tokens" type=RightParenthesis)
+					(a NonTerminal property="tokens" type=Equals)
+					(a NonTerminal property="tokens" type=SemiColon)
+					(a NonTerminal property="tokens" type=Operator)
+					(a NonTerminal property="tokens" type=LeftBrace)
+				])
+			)
+		)
+
+	fun Text toText [] (tokens toText)
+		
+.
+
+######################
+# Type Declarations
+######################
+
+a TypeDeclaration is a abstract BodyDeclaration that
+
+	has undoable Identifier name = (a Identifier)
+	has undoable BodyDeclarations declarations = (a BodyDeclarations)
+
+	fun Structure getScopeFor [has Element e] (do ("Class returning itself as scope" print) this)
+
+	fun Package resolvePackage [has Text name] (scope resolvePackage name)
+	
+	fun Set<Package> gatherPackages [has Set packages] (scope gatherPackages packages)
+
+	# First, a type declared in this type declaration, and next
+	# A type declared in scope.
+	fun JType resolveType [has Text typeName] 
+	(do
+		(("Resolving type " cat typeName) print)
+		(let	
+			[has TypeDeclaration declaration = 
+					(declarations.declarations itemThat 
+						(fun [has BodyDeclaration dec] 
+							((dec isa TypeDeclaration) and (dec.name.token isEquivalentTo typeName))))
+			]
+			(if (declaration is nothing) 
+				(scope resolveType typeName)
+				declaration
+			)
+		)
+	)
+	
+	fun Set<JType> gatherTypes [ has Set types ]
+	(do
+		(declarations.declarations foreach 
+			(fun [has BodyDeclaration dec] (if (dec isa TypeDeclaration) (types add dec) nothing)))
+		(scope gatherTypes types)
+		types
+	)
+
+	fun Method resolveMethod [ has Text methodName ]
+		(declarations.declarations itemThat 
+			(fun [ has BodyDeclaration dec ]
+				((dec isa Method) and (dec.name.token isEquivalentTo methodName))))
+	
+	fun Set<Method> gatherMethods [has Set methods]
+	(do
+		(declarations.declarations foreach (fun [has BodyDeclaration dec] (if (dec isa Method) (methods add dec))))
+		methods
+	)
+
+	fun VariableDeclaration resolveVariable [has Text variableName] 
+	(do
+		(("Resolving variable " cat variableName) print)
+		((this gatherVariables {}) itemThat 
+			(fun [has VariableDeclaration dec] (dec.name.token isEquivalentTo variableName))
+		)
+	)
+
+	fun Set<VariableDeclaration> gatherVariables [has Set variables] 
+	(do
+		((declarations.declarations ofType Field) foreach 
+			(fun [has Field field] (variables addItems field.fragments)))
+		variables
+	)
+
+	has static Expansion grammar = 
+		(a Choice expansions=[
+			(a NonTerminal type=Class)
+			(a NonTerminal type=UnparsableTypeDeclaration)
+#			(a NonTerminal type=Interface)
+		])
+
+	fun static Production getAbstractGrammar [] TypeDeclaration.grammar
+
+.
+
+a BodyDeclarations is a JavaStructure that
+
+	has LeftBrace left = (a LeftBrace)
+	has List<BodyDeclaration> declarations = []
+	has RightBrace right = (a RightBrace)
+		
+	fun Text toText [] ((left toText) + (declarations toFormattedText " " true) (right toText))
+
+	fun static bool isTerminal [] false
+	has static Expansion abstractGrammar = (a NonTerminal type=BodyDeclarations)
+	has static Expansion grammar =
+		(a Production type=BodyDeclarations expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="left" type=LeftBrace)
+				(a ZeroOrMore expansion=(a NonTerminal property="declarations" type=BodyDeclaration))
+				(a NonTerminal property="right" type=RightBrace)
+			])
+		)
+	fun static Production getAbstractGrammar [] BodyDeclarations.abstractGrammar
+
+.	
+
+a Class is a TypeDeclaration that
+
+	has undoable Modifiers modifiers = (a Modifiers)
+	has undoable ClassKeyword keyword = (a ClassKeyword)
+	has undoable List<TypeParameter> parameters = nothing
+	has undoable Extends extends <- (if (supertype is nothing) nothing (an Extends))
+	has undoable Type supertype = nothing
+	has undoable Implements implements = (if ((interfaces is nothing) or (interfaces isEmpty)) nothing (an Implements))
+	has undoable List<JType> interfaces = nothing
+
+	fun Text toText [] ("" + (modifiers toText) (keyword toText) (name toText) " " (declarations toText))
+
+	has static Expansion grammar = 
+		(a Production type=Class expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="modifiers" type=Modifiers)
+				(a NonTerminal property="keyword" type=ClassKeyword)
+				(a NonTerminal property="name" type=Identifier)
+				(an Optional 
+					expansion=(a Sequence expansions=[ 
+						(a NonTerminal property="extends" type=Extends) 
+						(a NonTerminal property="supertype" type=ReferenceType)])
+				)
+				(an Optional 
+					expansion=
+						(a Sequence expansions=[ 
+							(a NonTerminal property="implements" type=Implements) 
+							(a OneOrMore expansion=(a NonTerminal property="interfaces" type=ReferenceType))]))
+				(a NonTerminal property="declarations" type=BodyDeclarations)
+			])
+		)
+
+.
+
+an UnparsableTypeDeclaration is a TypeDeclaration that
+
+	has undoable List<JavaElement> tokens = []
+	
+	# A list of anything, preserving all structure.
+	fun static Bool isErroneous [] true
+	has static Expansion grammar = 
+		(a Production type=UnparsableTypeDeclaration expansion=
+			(a OneOrMore expansion=
+				(a Choice expansions=[
+					(a NonTerminal property="tokens" type=Structure)
+					(a NonTerminal property="tokens" type=Identifier)
+					(a NonTerminal property="tokens" type=Keyword)
+					(a NonTerminal property="tokens" type=Primitive)
+					(a NonTerminal property="tokens" type=LeftBrace)
+				])
+			)
+		)
+
+	fun Text toText [] (tokens toText)
+		
+.
+
+an Interface is a TypeDeclaration that
+
+	has undoable List<TypeParameter> parameters = []
+	has undoable List<Type> extends = []
+
+.
+
+######################
+# Class Body Declarations
+######################
+
+a Field is a BodyDeclaration that
+
+	has undoable Modifiers modifiers = (a Modifiers)
+	has undoable Type type = (a ReferenceType)
+	has undoable List<VariableDeclarationFragment> fragments = []
+	has undoable SemiColon semicolon = (a SemiColon)
+
+	fun Text toText [] ("" concat [
+		(modifiers toText)
+		(type toText) " "
+		(fragments toFormattedText ", " false)
+		(semicolon toText)
+	])
+
+	fun VariableDeclarationFragment fragmentNamed [has Text name]
+		(fragments itemThat 
+			(fun [has VariableDeclarationFragment frag] 
+				(frag.name.token isEquivalentTo name)))
+	
+	has static Expansion grammar = 
+		(a Production type=Field expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="modifiers" type=Modifiers)
+				(a NonTerminal property="type" type=JType)
+				(a OneOrMore expansion=(a NonTerminal property="fragments" type=VariableDeclarationFragment))
+				(a NonTerminal property="semicolon" type=SemiColon)
+			])
+		)
+
+.
+
+a Method is a BodyDeclaration that
+
+	has undoable Identifier name = (a Identifier)
+	has undoable Modifiers modifiers = (a Modifiers)
+	has undoable JType returnType = (a ReferenceType)
+	has undoable LeftParenthesis left = (a LeftParenthesis)
+	has undoable List<SingleVariableDeclaration> formalParameters = []
+	has undoable RightParenthesis right = (a RightParenthesis)
+	has undoable Throws throws = nothing
+	has undoable List<JType> exceptions = nothing
+	has undoable Block body = (a Block)
+	refs HTMLBody metadata = (an HTMLBody)
+
+	fun Text toText [] ("" concat [
+		(modifiers toText)
+		(if (returnType is nothing) "" (returnType toText)) " " (name toText)
+		(left toText) (formalParameters toFormattedText "," false) (right toText) " "
+		(body toText)
+	])
+
+	# A method returns itself as the scope for all of its properties
+	fun Structure getScopeFor [has Element e] this
+
+	# Methods don't declare types (except for type variables), so we ask this method's scope
+	fun JType resolveType [has Text typeName] 
+		(cond
+			(scope is nothing) nothing
+			true (scope resolveType typeName)
+		)
+		
+	fun Set<JType> gatherTypes [has Set types] (scope gatherTypes types)
+
+	# Methods don't declare methods, so we ask this method's scope
+	fun Method resolveMethod [has Text methodName] (scope resolveMethod methodName)
+	fun Set<Method> gatherMethods [has Set methods] (scope gatherMethods methods)
+
+	fun VariableDeclaration resolveVariable [has Text variableName] 
+	(do
+#		(("Resolving variable " cat variableName) print)
+		((this gatherVariables {}) itemThat 
+			(fun [has VariableDeclaration dec] (dec.name.token isEquivalentTo variableName))
+		)
+	)
+
+	# First we look at the variables declared as formal parameters, then we look
+	# look in the type.
+	fun Set<VariableDeclaration> gatherVariables [has Set variables] 
+	(do
+		(variables addItems formalParameters)
+		(scope gatherVariables variables)
+		variables
+	)
+
+	# returns true if the name is the same as the enclosing class.
+	fun Bool isConstructor [] 
+		(if (name.token isEmpty) 
+			false
+			(let [ refs TypeDeclaration typeOwner = (this ownerOfType TypeDeclaration) ]
+				(if (typeOwner is nothing) 
+					false
+					(typeOwner.name.token isEquivalentTo name.token)
+				)
+			)
+		)
+
+	has static Expansion grammar = 
+		(a Production type=Method expansion=
+			(a Sequence expansions=[
+				(a NonTerminal property="modifiers" type=Modifiers)
+				(an Optional expansion=
+					(a Choice expansions=[
+						(a NonTerminal property="returnType" type=JType) 
+						(a NonTerminal property="returnType" type=Void)]))
+				(a NonTerminal property="name" type=Identifier)
+				(a NonTerminal property="left" type=LeftParenthesis)
+				(a ZeroOrMore expansion=(a NonTerminal property="formalParameters" type=SingleVariableDeclaration))
+				(a NonTerminal property="right" type=RightParenthesis)
+				(an Optional expansion=
+					(a Sequence expansions=[
+						(a NonTerminal property="throws" type=Throws)
+						(a OneOrMore expansion=(a NonTerminal property="exceptions" type=Identifier))]))
+				(a NonTerminal property="body" type=Block)
+			])
+		)
+
+.
+
+an Initializer is a BodyDeclaration that.
+
+an EnumConstant is a BodyDeclaration that.
+
+an Enum is a BodyDeclaration that.
+
+######################
+# Types
+######################
+
+a JType is an abstract ScopedElement that
+
+	has static Expansion grammar = 
+		(a Choice expansions=[
+			(a NonTerminal type=ReferenceType) 
+			(a NonTerminal type=Integer)
+			(a NonTerminal type=Double)
+			(a NonTerminal type=Byte)
+			(a NonTerminal type=Float)
+			(a NonTerminal type=Character)
+			(a NonTerminal type=Boolean)
+			(a NonTerminal type=Long)
+		]
+	)
+
+	fun static Production getAbstractGrammar [] JType.grammar
+
+.
+
+a ReferenceType is a JType that
+
+	has undoable Identifier type = (an Identifier whitespace=" ")
+	
+	fun Text toText [] (type toText)
+
+	has static Expansion grammar = 
+		(a Production type=ReferenceType expansion=(a NonTerminal property="type" type=Identifier))
+
+.
+
+an ArrayType is a JType that.
+a ParameterizedType is a JType that.
+a Wildcard is a JType that.
+a TypeParameter is a JType that.
+
+######################
+# Annotations
+######################
+
+#Annotation
+#AnnotationTypeDeclaration
+#AnnotationTypeMemberDeclaration
+#MarkerAnnotation

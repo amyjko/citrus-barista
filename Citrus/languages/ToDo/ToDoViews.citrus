@@ -1,0 +1,164 @@
+language ToDo
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.paints"
+
+init
+(do
+	(ToDo extractViews)
+	((a ToDoApp width=200.0 height=200.0) show)	
+)
+
+#######################
+# Views
+#
+
+a ToDoItemView is an ElementView that
+
+	has ToDoItem model = ?
+
+	has constant Layout layout = (a VerticalLayout spacing=4.0)
+	has Real width <- ((this parentsWidth) minus left)
+	has Real height <- (this lastChildsBottom)
+
+	has Real scale <- 
+		(if ((model ownerOfType ToDoDoc) is nothing) 1.0
+			(if (model.done and (model ownerOfType ToDoDoc).hide) 0.0 1.0))
+
+	has List<View> children = [ (a Header) (model.@items toView) ]
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a Keyboard.Typed character=`\n`) action='(do 
+			refs ToDoItem newItem = (a ToDoItem)
+			(if (model.items isEmpty)
+				(model.owner insertAfter model newItem)
+				(model.items insert newItem))
+			((newItem.@whatToDo firstView) requestKeyboardFocus "next")
+			true
+		))
+		(a Behavior event=(a Keyboard.Typed character=`\b`) action='(do 
+			refs ToDoItem newFocus = (model.owner itemBefore model)
+			(if (newFocus is nothing)
+				(@newFocus set (model ownerOfType ToDoItem)))
+			(if ((newFocus is nothing) not)
+				(do
+					(model.owner remove model)
+					((newFocus.@whatToDo firstView) requestKeyboardFocus "previous")))
+			true				
+		))
+		(a Behavior event=(a Keyboard.Typed shift=false character=`\t`) action='(do 
+			refs ToDoItem itemBefore = (model.owner itemBefore model)
+			(if ((itemBefore is nothing) not) 
+				(do
+					(model.owner remove model)
+					(itemBefore.items append model)))
+			true
+		))
+		(a Behavior event=(a Keyboard.Released key="escape") action='(do 
+			refs ToDoItem itemOwner = (model ownerOfType ToDoItem)
+			(if ((itemOwner is nothing) not)
+				(do
+					(model.owner remove model)
+					(itemOwner.owner insertAfter itemOwner model)))
+			true
+		))
+		(a Behavior event=(a Keyboard.Pressed key="right") action='(this focusOnNext))
+		(a Behavior event=(a Keyboard.Pressed key="down") action='(this focusOnNext))
+		(a Behavior event=(a Keyboard.Pressed key="left") action='(this focusOnPrevious))
+		(a Behavior event=(a Keyboard.Pressed key="up") action='(this focusOnPrevious))				
+	]
+
+	fun Bool focusOnNext []	(do
+		refs ToDoItem itemAfter = (model itemAfter)
+		(if (itemAfter is nothing) true
+			((itemAfter.@whatToDo firstView) requestKeyboardFocus "next")))
+
+	fun Bool focusOnPrevious [] (do
+		refs ToDoItem itemBefore = (model itemBefore)
+		(if (itemBefore is nothing) true
+			((itemBefore.@whatToDo firstView) requestKeyboardFocus "previous")))
+
+	a Header is a View that 
+
+		has Layout layout = (a HorizontalLayout spacing=10.0)
+		has Real width <- (this parentsWidth)
+		has Real height <- (this tallestChildsHeight)
+		has Bool clipsChildren = false
+
+		has List<View> children = [
+			(a Checkbox property=model.@done) 
+			(a WhatToDoBox property=model.@whatToDo)
+		]		
+	.
+	
+	a WhatToDoBox is a TextField that
+
+		has static Paint focusPaint = (a RectanglePaint primaryColor=(a Color r=0.0 g=0.0 b=255.0 alpha=128.0) cornerWidth=5.0 cornerHeight=5.0)
+		has List<Behavior> behaviors = ([
+			(a Behavior event=(an App.FocusReceived) action=
+				'(do (background append WhatToDoBox.focusPaint) true))
+			(a Behavior event=(an App.FocusLost) action=
+				'(do (background remove WhatToDoBox.focusPaint) true))
+		] appendList super)
+	.
+.
+
+a ToDoItemListView is a ListView that
+
+	has List<ToDoItem> model = ?
+
+	has constant Layout layout = (a VerticalLayout spacing=0.0)
+	has Real width <- ((this parentsWidth) minus left)
+	has Real height <- (this lastChildsBottom)
+	has Real left = 20.0
+.
+
+a ToDoDocView is a ElementView that
+
+	has ToDoDoc model = ?
+
+	has Real width <- (this parentsWidth)
+	has Real height <- (this parentsHeight)
+	has constant Layout layout = (a VerticalLayout spacing=0.0)
+
+	has List<View> children = [
+		(a Header) 
+		(a ScrollView 
+			height<-'(this parentsRemainingHeight) 
+			viewToScroll=(a Body))
+	]
+
+	a Header is a View that
+
+		has Real width <- (this parentsWidth)
+		has Real height <- (this tallestChildsHeight)
+		has Layout layout = (a HorizontalLayout alignment="vertically-centered" spacing=5.0)
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+
+		has List<Paint> background = [(this getStyle).lighterBackgroundPaint]
+
+		has List<View> children = [ 
+			(a Button label=(a Label text="Save"))
+			(a Checkbox property=model.@hide)
+			(a Label text="Hide completed items")
+		]
+	.
+	
+	a Body is a View that
+	
+		has Real width <- (this parentsWidth)
+		has Real height <- (children first).height
+		has Real vPad = 5.0
+		has List<View> children = [ (model.@items toView) ]
+	.
+.
+
+a ToDoApp is an App that
+
+	has ToDoDoc document = (a ToDoDoc)
+	has List<View> children = [(@document toView)]
+.

@@ -1,0 +1,21 @@
+language Widgets
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.layouts"
+
+a LabeledView is an View that
+
+	has Text label = ?
+	refs View view = ?
+#	has FontFace font = (a FontFace family="Arial" size=12.0)
+
+	has Real hPad = 2.0
+	has Real vPad = 2.0
+
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Layout layout = (a HorizontalLayout spacing=2.0)
+
+	has List<View> children = [ (a Label text=label) view ]
+
+.

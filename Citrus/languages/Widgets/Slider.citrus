@@ -1,0 +1,166 @@
+language Widgets
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.transitions"
+
+a Slider is a View that
+
+	refs Property property = ?
+
+	has Layout layout = (a VerticalLayout spacing=5.0)
+
+	has Real width <- (this widestChildsWidth)
+	has Real height <- (this bottommostChildsBottom)
+
+	has Bool clipsChildren = false
+	has Real transparency <- (if enabled 1.0 0.25)
+	
+	has Bool enabled <- ((property is nothing) not)
+
+	has Bool vertical = true
+	has Real length = 50.0
+
+	has List<View> children = [(a Track)]
+
+	has Real min = 0.0
+	has Real max = 100.0
+
+	fun Real getMaximum [] max
+	fun Real getMinimum [] min
+	fun Real getRange [] ((this getMaximum) minus (this getMinimum))
+
+	fun Real increment []
+		(((this getMaximum) minus (this getMinimum)) divide 20.0)
+
+	a Knob is a View that
+	
+		has Bool focusable = true
+		has Real width <- ((background first).image width)
+		has Real height <- ((background first).image height)
+
+		# x = (value / (max - min)) * (movable width)
+		has Real left <-
+			(if vertical 
+				0.0
+				(if (property is nothing) 
+					0.0
+					(((this parentsWidth) minus (this paddedWidth)) times
+						(((property get) minus (this getMinimum)) divide 
+							((this getMaximum) minus (this getMinimum))))
+				)
+			)
+		
+	 	# y = (value / (max - min)) * (movable height)
+		has Real top <-
+			(if (vertical not)
+				0.0
+				(if (property is nothing)
+					0.0
+					(((this parentsHeight) minus (this paddedHeight)) times
+						(((property get) minus (this getMinimum)) divide 
+							((this getMaximum) minus (this getMinimum))))
+				)
+			)
+
+		has Bool clipsChildren = false
+
+		has List<Paint> background = [(an ImagePaint image=(this getImage "Slider.png"))]
+
+		has List<Behavior> behaviors = [
+			(a Behavior event=(a MouseButton.Pressed) action='(do ((this mouse).cursor pick this) true))
+			(a Behavior event=(a MousePointer.Dragged) action=(fun [ refs View view refs Event event ]
+				(do
+					refs Point point = ((this mouse).cursor getPointRelativeToPointPicked)
+					(cond
+						(property is nothing) false
+						# (yPositionRelative / (trackHeight - knobHeight)) * (max - min)
+						vertical
+							(do
+								(property set
+									((this getMinimum) plus 
+										((1.0 min
+											(0.0 max
+												(point.y divide ((this parentsHeight) minus (this paddedHeight)))))
+										times (this getRange))))
+								true
+							)
+						# (xPositionRelative / (trackWidth - knobHeight)) * (max - min)
+						true
+							(do
+								(property set
+									((this getMinimum) plus 
+										((1.0 min
+											(0.0 max
+												(point.x divide ((this parentsWidth) minus (this paddedWidth)))))
+										times (this getRange))))
+								true
+							)
+					)
+				)
+			))
+			(a Behavior event=(a MouseButton.Released) action='(do ((this mouse).cursor release) true))
+
+		]
+
+	.
+	
+	a Track is a View that
+	
+		has Real width <- (if vertical ((children first) paddedWidth) length)
+		has Real height <- (if vertical length ((children first) paddedHeight))
+
+		has List<Behavior> behaviors = [
+			(a Behavior event=(a MouseButton.Pressed) action=(fun [ refs View view refs Event event ]
+				(do
+					(property is nothing) false
+					# min + ((mouseY - knobHeight / 2) / (trackHeight - knobHeight)) * (max - min)
+					vertical
+						(do
+							(property set
+								((this getMinimum) +
+									((1.0 min
+										(0.0 max
+											(((this globalToLocal event.point).y - (((children first) paddedHeight) / 2.0)) /
+												(height - ((children first) paddedHeight))))) *
+													(this getRange))) (a FastToSlow duration=150.0))
+							true
+						)
+					# min + ((mouseX - knobWidth / 2) / (trackWidth - knobWidth)) * (max - min)
+					true
+						(do
+							(property set
+								((this getMinimum) +
+									((1.0 min
+										(0.0 max
+											(((this globalToLocal event.point).x - (((children first) paddedWidth) / 2.0)) /
+												(width - ((children first) paddedWidth))))) *
+													(this getRange))) (a FastToSlow duration=150.0))
+							true
+						)
+				)			
+			))
+		]
+
+		has Real hPad = 3.0
+		has Real vPad = 3.0
+		has Bool clipsChildren = false
+
+		has List<View> children = [ (a Knob) ]
+		has List<Paint> background = [(a MovingLinePaint)]
+
+		a MovingLinePaint is a LinePaint that
+		
+			has Real x1 <- (if vertical 0.5 0.0)
+			has Real x2 <- (if vertical 0.5 1.0)
+			has Real y1 <- (if vertical 0.0 0.5)
+			has Real y2 <- (if vertical 1.0 0.5)
+		
+		.
+
+	.
+	
+.

@@ -1,0 +1,89 @@
+// Created on May 20, 2005
+
+package edu.cmu.marm.elements;
+
+import edu.cmu.marm.elements.declarations.*;
+import edu.cmu.marm.elements.functions.*;
+import edu.cmu.marm.elements.properties.*;
+
+import java.util.*;
+
+// Static import to construct expressions using java code.
+public class Functions {
+
+//	public static Function name(params) {}
+
+	// Get a property in this environment given a declaration
+	public static <ValueType> GetProperty<ValueType> getProp(PropertyDecInterface<ValueType> dec) { return new GetProperty<ValueType>(dec); }
+
+	// Get the declaration given a property
+	public static <ValueType> GetPropertyDeclaration getDeclaration(Function<Property<ValueType>> propertyExpression) { 
+		
+		return new GetPropertyDeclaration<ValueType>(propertyExpression); 
+		
+	}
+	
+	// Get the value of a property in this environment given a declaration
+	public static <TypeOfValue> GetValue<TypeOfValue> getValue(PropertyDecInterface<TypeOfValue> dec) { return new GetValue<TypeOfValue>(dec); }
+
+	// Get the value of a property in this environment given a declaration
+	public static <TypeContained extends ElementInterface> Quote<TypeContained> quote(TypeContained e) { return new Quote<TypeContained>(e); }
+
+	// Set the value of a property in this environment given a declaration and an appropriately typed value
+//	public static <ValueType> SetValue set(PropertyDec<?,ValueType> property, Value<ValueType> value) {}
+	
+	// Also needs to take a lambda function
+	public static <ItemType extends ElementInterface> Set<ItemType> thatAre(Declaration<List<ItemType>> list) { 
+
+//		return new ElementsThatAre(list, lambda);
+		return null;
+		
+	}
+
+	// Returns a quoted expression, preventing evaluation
+//	public static Quote quote(ElementInterface expression);
+	
+	// Construct an argument for an instantiation
+	public static <ValueType> Argument arg(PropertyDec<ValueType> dec, Function<? extends ValueType> value) {
+	
+		return new Argument(dec, value);
+	
+	}
+
+	// Constructs an instantiation expression given a type and a list of arguments
+//	public static <TypeToMake extends ElementInterface> Value<TypeToMake> make(Class<TypeToMake> typeToMake) {
+//		
+//		return new Make<TypeToMake>(typeToMake);
+//		
+//	}
+	
+	// Constructs an instantiation expression given a type and a list of arguments
+	public static <TypeToMake extends ElementInterface> Function<TypeToMake> make(Class<TypeToMake> typeToMake) {
+		
+		return new Make<TypeToMake>(typeToMake);
+		
+	}
+
+	// Constructs an instantiation expression given a type and a list of arguments
+	public static <TypeToMake extends ElementInterface> Function<TypeToMake> make(Class<TypeToMake> typeToMake, Argument ... args) {
+		
+		return new Make<TypeToMake>(typeToMake, args);
+		
+	}
+//	public static Make make(Class classType, )
+	
+	// Returns the type of the element represented by the expression
+//	public static TypeInterface type(Value<ElementInterface>) {}
+	
+	public static <TypeOfPossession> Possessive<TypeOfPossession> dot(Function<? extends ElementInterface> possessor, Function<TypeOfPossession> possession) {
+		
+		return new Possessive<TypeOfPossession>(possessor, possession);
+		
+	}
+	
+	public static StringConstant string(String literal) { return new StringConstant(literal); }
+	public static DoubleConstant d(double literal) { return new DoubleConstant(literal); }
+	public static IntegerConstant i(int literal) { return new IntegerConstant(literal); }
+	public static BooleanConstant b(boolean literal) { return new BooleanConstant(literal); }
+	
+}

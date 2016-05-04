@@ -1,0 +1,460 @@
+language CitrusEditor
+
+# We import citrus since we're making views
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+uses "Widgets"
+
+init
+(do
+	(CitrusEditor extractViews)
+	((an EditorWindow lang=(a Language units={ (a Unit) } )) show)
+)
+
+an EditorWindow is an App that
+
+	has Language lang = ?
+	has Real width = 640.0
+	has Real height = 480.0
+	
+	has List<View> children = [ (this translate @lang) ]
+
+.
+
+a LanguageView is an ElementView that
+
+	refs Language model = ?
+
+	has Layout layout = (a VerticalLayout)
+	has Real width <- (this parentsWidth)
+	has Real height <- (this parentsHeight)
+	
+	refs Unit selection = nothing
+	
+	has List<Behavior> behaviors = []
+
+	has List<View> children = [
+		(a Header)
+		(a Body)
+	]
+
+	a Header is a View that
+
+		has Layout layout = (a HorizontalLayout spacing=5.0)
+		has Real width <- (this parentsWidth)
+		has Real height <- (this tallestChildsHeight)
+		has Bool clipsChildren = false
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+
+		has List<Paint> background = [ (a FilledRectanglePaint primaryColor=(this getStyle).lightColor) ]
+
+		has List<View> children = [
+			(a Label text="language" font=(a FontFace family="Arial" size=20.0))
+			(this translate model.@name)
+			(a View width <- '((this parentsRemainingWidth) minus 25.0) height = 25.0)
+			(a Button 
+				label=(a Label text="Save") 
+				action='(parent.model writeXMLTo (parent.model.name cat ".xml")))
+		]
+		
+	.
+
+	a Body is a View that
+
+		has Layout layout = (a HorizontalLayout spacing=0.0)
+		has Real width <- (this parentsWidth)
+		has Real height <- (this parentsRemainingHeight)
+		has List<View> children = [ 
+			(a PaletteList children=[
+				(a Palette name="Units" contents=(a UnitsPanel))
+				(a Palette name="Declarations" contents=(a DeclarationsPalette))
+				(a Palette name="Code" contents=(a CodePalette))
+			]
+				background = [ (a FilledRectanglePaint primaryColor=(this getStyle).lightColor) ]
+			)
+			(this translate @selection) ]
+		
+	.
+	
+	a DeclarationsPalette is a View that
+	
+		has Layout layout = (a VerticalLayout spacing=3.0)
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this lastChildsBottom)
+		has List<View> children = [
+			(a Duplicator 
+				elementToDuplicate=(a Class)
+				label=(a Label text="Class"))
+			(a Duplicator 
+				elementToDuplicate=(a PropertyDeclaration value=(a Name) type=(a TypeExpression class=(a Name)))
+				label=(a Label text="refs ..."))
+			(a Duplicator 
+				elementToDuplicate=(a Rule)
+				label=(a Label text="rule ..."))
+			(a Duplicator 
+				elementToDuplicate=(a Fun)
+				label=(a Label text="fun ..."))
+			(a Duplicator 
+				elementToDuplicate=(a When)
+				label=(a Label text="when ..."))
+		]
+	
+	.
+
+	a CodePalette is a View that
+	
+		has Layout layout = (a VerticalLayout spacing=3.0)
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this lastChildsBottom)
+		has List<View> children = [
+			(a Duplicator 
+				elementToDuplicate=(an Evaluate)
+				label=(a Label text="( ... )"))
+			(a Duplicator 
+				elementToDuplicate=(a Possessive)
+				label=(a Label text="a.b"))
+			(a Duplicator 
+				elementToDuplicate=(a PropertyReference)
+				label=(a Label text="@a"))
+			(a Duplicator 
+				elementToDuplicate=(a Do)
+				label=(a Label text="(do ...)"))
+			(a Duplicator 
+				elementToDuplicate=(a NewList)
+				label=(a Label text="[ ... ]"))
+			(a Duplicator 
+				elementToDuplicate=(a NewSet)
+				label=(a Label text="{ ... }"))
+			(a Duplicator 
+				elementToDuplicate=(a Quote)
+				label=(a Label text="'..."))
+		]
+	
+	.
+
+	a StructureDuplicator is a Duplicator that
+	
+		has FontFace font = (this getStyle).boldFont 
+		has List<Paint> background = [ 
+			(a FilledRectanglePaint 
+				primaryColor=(this getStyle).lighterColor 
+				secondaryColor=(a Color r=255.0 g=255.0 b=255.0))
+		]
+	
+	.
+	
+	a UnitsPanel is a View that
+	
+		has List<View> children = [ (this translate model.@units ) ]
+	
+	.
+
+.
+
+a UnitSetView is a SetView that
+
+	has Set<Unit> model = ?
+	
+	has Layout layout = (a VerticalLayout spacing=3.0)
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this lastChildsBottom)
+
+.
+
+a UnitView is an ElementView that
+
+	refs Unit model = ?
+
+	has Layout layout = (a HorizontalLayout)
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this tallestChildsHeight)
+
+	has List<View> children = [ (a Label text="Unit") ]
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a MouseButton.Pressed) action=
+			'(do
+				((this ownerOfType LanguageView).@selection set model)
+				(debug "Pressed" model " now selection is " (this ownerOfType LanguageView).selection)
+				true
+			)
+		)
+	]
+
+.
+
+a UnitReferenceView is a ReferenceView that
+
+	refs Unit model = ?
+	has Real width <- (this parentsRemainingWidth)
+	has Real height <- (this parentsHeight)
+
+	has List<View> children = [
+		(a ScrollView viewToScroll=(this translate model.@classes))
+	]
+
+.
+
+a NoUnitView is a ElementView that
+
+	refs Nothing<Unit> model = ?
+
+	has Real width <- (this parentsRemainingWidth)
+	has Real height <- (this parentsHeight)
+	has List<Paint> background = [ (a FilledRectanglePaint primaryColor=(a Color r=200.0 g=200.0 b=200.0)) ]
+	has List<View> children = [(a Label text="There is no unit selected.")]
+
+.
+
+a NameView is an ElementView that
+
+	has Name model = ?
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this lastChildsBottom)
+	has List<View> children = [ 
+		(a TextField 
+			property=model.@token
+			width<-'(20.0 max textLayout.rightExtent)
+		)
+	]
+	
+.
+
+a ClassView is an ElementView that
+
+	has Class model = ?
+	has Real vPad = 5.0
+	has Layout layout = (a HorizontalLayout alignment="top-aligned" spacing=5.0)
+	has Bool collapse = false
+
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	
+	has List<Behavior> behaviors = [
+		(a Draggable)
+		(a Navigable)
+		(a Behavior event=(an App.ChildReceivedFocus) action=
+			'((children nth 3).@scale set 1.0 (a Uniform duration=100.0)))
+		(a Behavior event=(an App.ChildLostFocus) action=
+			'((children nth 3).@scale set 0.0 (a Uniform duration=100.0)))
+	]
+	
+	# Dash is \u2212
+	has List<View> children = [
+		(a Toggler property=@collapse trueView=(a Label text="+") falseView=(a Label text="-"))
+		(a Body)
+		(a Views)
+	]
+
+	a Body is a View that
+
+		has Real width <- (if collapse ((children first) paddedWidth) (this widestChildsWidth))				
+		has Real height <- (if collapse ((children first) paddedHeight) (this lastChildsBottom))
+
+		has Layout layout = (a VerticalLayout)
+		has Bool clipsChildren = false
+
+		has List<View> children = [ (a Header) (a Footer) ]
+		has List<Behavior> behaviors = [(a Navigable)]
+		
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+	.
+
+	a Header is a View that
+	
+		has Layout layout = (a HorizontalLayout)
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+
+		has Bool clipsChildren = false
+
+		has Text aOrAn <-
+			(cond
+				((model.name.token length) isEquivalentTo 0) "A"
+				((model.name.token charAt 0) isVowel) "An"
+				true "A"
+			)
+
+		has List<Behavior> behaviors = [ (a Navigable) ]
+		
+		has List<View> children = [
+			(a Label property=@aOrAn)
+			(this translate model.@name)
+			(a Label text="is a")
+			(this translate model.@prototype)
+		]
+		
+	.
+
+	a Footer is a View that
+
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this lastChildsBottom)
+		has Layout layout = (a VerticalLayout)
+		has Bool clipsChildren = false
+		has Bool hidden <- collapse
+		
+		has List<Behavior> behaviors = [ (a Navigable) ]
+
+		has List<View> children = [
+			(this translate model.@declarations)
+		]
+		
+	.
+
+	a Views is a View that
+
+		has Real width <- (this widestChildsWidth)
+		has Real height <- (this lastChildsBottom)
+		has Real scale = 0.01
+		has Layout layout = (a VerticalLayout spacing=2.0)
+		has Bool clipsChildren = false
+		has List<View> children = [
+			(a Button label=(a Label text="Element View") action='(parent showEditorFor parent.model))
+			(a Button label=(a Label text="Reference View") action='(parent showEditorFor parent.model))
+			(a Button label=(a Label text="Nothing View") action='(parent showEditorFor parent.model))
+		]
+	
+	.
+
+	fun Nothing showEditorFor [ refs Type type ]
+		(let [ refs Type newType refs Unit newUnit ]
+			(do
+
+				(@newType set (ElementView createSubType (type.name cat "View")))
+
+				(newType declareProperty ((ElementView getDeclarationOf "model") override (a TypeExpression name=type.name) nothing))
+				(newType declareProperty ((ElementView getDeclarationOf "children") override (ElementView getDeclarationOf "children").typeExpression (a NewList)))
+				(newType declareProperty ((ElementView getDeclarationOf "behaviors") override (ElementView getDeclarationOf "behaviors").typeExpression (a NewList)))
+				(newType declareProperty ((ElementView getDeclarationOf "layout") override (ElementView getDeclarationOf "layout").typeExpression (a NoLayout)))
+				(newType declareProperty ((ElementView getDeclarationOf "width") override (ElementView getDeclarationOf "width").typeExpression (a RealLiteral token="100.0")))
+				(newType declareProperty ((ElementView getDeclarationOf "height") override (ElementView getDeclarationOf "height").typeExpression (a RealLiteral token="100.0")))
+				(newType declareProperty ((ElementView getDeclarationOf "scale") override (ElementView getDeclarationOf "scale").typeExpression (a RealLiteral token="1.0")))
+
+				(@newUnit set 
+					(a Unit 
+						types=[ newType ] 
+						uses=[ 
+							"edu.cmu.hcii.citrus.views" 
+							"edu.cmu.hcii.citrus.views.widgets" 
+							"edu.cmu.hcii.citrus.views.layouts" 
+						]))
+				
+				(debug "Units are " (type ownerOfType Language).units)
+				((type ownerOfType Language) include newUnit)
+
+				((a ViewEditorWindow viewType=newType) show)
+
+			)
+		)
+
+.
+
+a ClassListView is a ListView that
+
+	has List<Class> model = ?
+
+	has Layout layout = (a VerticalLayout spacing=3.0)
+	has Real width <- (if (model isEmpty) (this parentsWidth) (this rightmostChildsRight))
+	has Real height <- (if (model isEmpty) (this parentsHeight) (this lastChildsBottom))
+	has Bool clipsChildren = false
+	
+	has List<Behavior> behaviors = [ (an Insertable) ]
+	
+.
+
+a TypeExpressionView is an ElementView that
+
+	has TypeExpression model = ?
+
+	has Layout layout = (a HorizontalLayout)
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Bool clipsChildren = false
+
+	has List<View> children = [
+		(this translate model.@class)
+		(an Arguments)
+	]
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(an App.ChildReceivedFocus) action=
+			'((children nth 2).@scale set 1.0 (a Uniform duration=100.0)))
+		(a Behavior event=(an App.ChildLostFocus) action=
+			'(if (model.arguments isEmpty) ((children nth 2).@scale set 0.0 (a Uniform duration=100.0)) true))
+		(a Draggable)
+		(a Navigable)
+	]	
+
+	an Arguments is a View that
+
+		has Layout layout = (a HorizontalLayout)
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		has Bool clipsChildren = false
+		has Real scale <- (if (model.arguments isEmpty) 0.0 1.0)
+		has List<View> children = [
+			(a Label text="<")
+			(this translate model.@arguments)
+			(a Label text=">")
+		]
+
+	.
+	
+.
+
+an ArgumentListView is a ListView that
+
+	has List<Argument> model = ?
+	has Layout layout = (a VerticalLayout spacing=2.0)
+	has Real width <- (if (model isEmpty) 4.0 (this rightmostChildsRight))
+	has Real height <- (if (model isEmpty) 16.0 (this lastChildsBottom))
+	has Bool vertical = false
+	has List<Behavior> behaviors = (super append
+		(a Behavior event=(a Keyboard.Typed) action='(this insertNewRefAndHaveItHandle))
+	)
+	
+	fun Nothing insertNewRefAndHaveItHandle [] nothing
+
+.
+
+an ArgumentView is an ExpressionView that
+
+	has Argument model = ?
+	has List<View> children = [(a Keyword) (this translate model.@value)]
+
+	has List<Behavior> behaviors = [
+		(a Navigable)
+	]
+
+	a KeywordView is a View that
+	
+		has Real scale <- (if (model.param isEmpty) 0.0 1.0)
+		has Bool hidden <- (model.param isEmpty)
+		has Layout layout = (a HorizontalLayout)
+
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		
+		has List<View> children = [
+			(a TextField property=model.@param font=(this getStyle).italicFont)
+			(a Toggler 
+				property=model.@valueIsConstraint 
+				trueView=(a Label text="<-") 
+				falseView=(a Label text="="))
+		]
+
+		has List<Behavior> behaviors = [ (a Navigable) ]
+
+		has Bool clipsChildren = false
+
+	.
+	
+.

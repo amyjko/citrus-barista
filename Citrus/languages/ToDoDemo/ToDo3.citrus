@@ -1,0 +1,5 @@
+language ToDouses "edu.cmu.hcii.citrus.restrictions"######################## Models#a ToDoItem is a Element that	has Bool done = false	has Text whatToDo = ""
+		restricted to [ (a RegularExpression expr="[^\s]*") ]
+
+	fun test [ has Real one has Real two ]
+		(if done (one plus two) (one minus (this test2))).a ToDoList is a Element that.a ToDoDoc is a Element that.

@@ -1,0 +1,309 @@
+language Barista
+
+# An element that is defined by a grammar
+a Structure is an abstract Element that
+
+	fun static Bool isTerminal [] true
+	fun static Bool isErroneous [] false
+	fun static Bool isRoot [] false
+	fun static Bool isMutable [] true
+
+	fun Nothing unparse [ refs Set structuresToUnparse ]
+		(let [ refs List unparsedTokens = [] ]
+			(do
+				(this unparseHelper unparsedTokens structuresToUnparse)
+				unparsedTokens
+			)
+		)
+
+	fun Nothing unparseHelper [ refs List tokens refs Set structuresToUnparse ] 
+		(if (this isTerminal) 
+			(tokens append this)
+			(grammar.propertyOrder foreach
+				(fun [ refs Text propertyName ]
+					(do
+						(let [ refs Element property = (this getProperty propertyName) 
+								 refs Element propertyValue = (if (property is nothing) nothing (property get))]
+							(cond
+								(property is nothing) (debug "Warning: couldn't find a property named " propertyName " in " this)
+								(propertyValue is nothing) nothing
+								(propertyValue isa List) (propertyValue foreach (fun [ refs Element item ] (item unparseHelper tokens structuresToUnparse)))
+								(propertyValue isTerminal) (tokens append propertyValue)
+								(structuresToUnparse is nothing) (propertyValue unparseHelper tokens structuresToUnparse)
+								(structuresToUnparse contains propertyValue) (propertyValue unparseHelper tokens structuresToUnparse)
+								true (tokens append propertyValue)
+							)
+						)
+					)
+				)
+			)				
+		)
+	
+	# Get the name of the property that owns this and ask the owner
+	# for the name of the property to the left
+	fun Token lastTokenIn [] (if (this isTerminal) this (this directionTokenIn true))
+	fun Token firstTokenIn [] (if (this isTerminal) this (this directionTokenIn false))
+	fun Token directionTokenIn [ refs Bool direction ]
+		(let [ 
+			refs Text currentProperty = (if direction (grammar.propertyOrder last) (grammar.propertyOrder first))
+			refs Structure directionStructure = ((this getProperty currentProperty) get)
+		]
+			(do
+				(while (((currentProperty is nothing) not) and 
+							((directionStructure is nothing) or
+								((directionStructure isa List) and (directionStructure isEmpty))))
+					(do
+						(@currentProperty set 
+							(if direction 
+								(grammar.propertyOrder itemBefore currentProperty)
+								(grammar.propertyOrder itemAfter currentProperty)))
+						(if ((currentProperty is nothing) not)
+							(@directionStructure set ((this getProperty currentProperty) get)))
+					)
+				)
+				(if (currentProperty is nothing)
+					nothing
+					(if (directionStructure isa List)
+						((if direction (directionStructure last) (directionStructure first)) directionTokenIn direction)
+						(directionStructure directionTokenIn direction)
+					)					
+				)
+			)
+		)
+
+	fun Text nameReferredToAs []
+		(if (owner isa List) ((owner getPropertyOwner) name) ((this getPropertyOwner) name))
+
+	fun Text getPropertyNameAfter [] 
+		(let [ 
+				refs Element structure = (if (owner isa List) owner this)
+				refs Element structureOwner = (structure ownerOfType Structure)
+				refs Text propertyOwner = ((structure getPropertyOwner) name)
+				refs Text propertyAfter = (structure.owner.grammar.propertyOrder itemAfter propertyOwner)
+				]
+			(if (propertyAfter is nothing)
+				(if (structureOwner is nothing) 
+					nothing
+					((structure ownerOfType Structure) getPropertyNameAfter)
+				)
+				propertyAfter
+			)
+		)
+	
+	fun Structure structureRightOf [] (this structureDirectionOf true)
+	fun Structure structureLeftOf [] (this structureDirectionOf false)
+	fun Structure structureDirectionOf [ refs Bool direction ]
+		# If this is in a list and we want the next structure and this isn't last one, return the item after.
+		# If this is in a list and we want the previous structure and this isn't the first, return the item before.
+		(if ((owner isa List) and (if direction (((owner last) is this) not) (((owner first) is this) not)))
+			(if direction (owner itemAfter this) (owner itemBefore this))
+		# Otherwise, we'll do some searching.
+			(let [ 
+				refs Element structure = (if (owner isa List) owner this)
+				refs Text propertyOwner = ((structure getPropertyOwner) name)
+				refs Text propertyDirOf = 
+					(if direction
+						(structure.owner.grammar.propertyOrder itemAfter propertyOwner)
+						(structure.owner.grammar.propertyOrder itemBefore propertyOwner)
+					)
+				refs Property propertyOfStructure =
+					(if (propertyDirOf is nothing)
+						nothing
+						(structure.owner getProperty propertyDirOf)
+					)
+				refs Element structureRightOf = 
+					(if (propertyOfStructure is nothing) 
+						(do (debug "Couldn't find a property named " propertyDirOf " in " structure.owner) nothing)
+						(propertyOfStructure get)
+					)
+				]
+				(do
+					# While there's a property right of, but it points to nothing, get
+					(while 	(((propertyDirOf is nothing) not) and 
+								 ((structureRightOf is nothing) or 
+									((structureRightOf isa List) and (structureRightOf isEmpty))))
+						(do
+							(@propertyDirOf set 
+								(if direction
+									(structure.owner.grammar.propertyOrder itemAfter propertyDirOf)
+									(structure.owner.grammar.propertyOrder itemBefore propertyDirOf)
+								)
+							)
+							(if ((propertyDirOf is nothing) not)
+								(@structureRightOf set 
+									(if ((structure.owner getProperty propertyDirOf) is nothing)
+										(do (debug "Couldn't find a property named " propertyDirOf " in " structure.owner) nothing)
+										((structure.owner getProperty propertyDirOf) get)
+									)
+								)
+							)
+						)
+					)
+					(if (propertyDirOf is nothing)
+						# If there is no structure right of this structure, ask the owner for the structure right of it.
+						(structure.owner structureDirectionOf direction)
+						# Otherwise, return the value of the property
+						(if (structureRightOf isa List)
+							(if direction (structureRightOf first) (structureRightOf last))
+							structureRightOf
+						)
+					)
+				)
+			)
+		)
+		
+	fun Token tokenRightOf []
+		(let [ refs Structure structureRightOf = (this structureRightOf) ]
+			(if (structureRightOf is nothing) nothing (structureRightOf firstTokenIn)))
+			
+	fun Token tokenLeftOf []
+		(let [ refs Structure structureLeftOf = (this structureLeftOf) ]
+			(if (structureLeftOf is nothing) nothing (structureLeftOf lastTokenIn)))
+
+	fun Token lastTokenOfPreviousLine []
+		(let [ refs Structure token = (this tokenLeftOf) ]
+			(do
+				(while (((token is nothing) not) and ((token.whitespace contains `\n`) not))
+					(do
+						(debug "Skipping " token)
+						(@token set (token tokenLeftOf))
+					)
+				)
+				token
+			)
+		)
+
+	fun Token firstTokenOfNextLine []
+		(let [ refs Structure token = (this tokenRightOf) ]
+			(do
+				(while (((token is nothing) not) and ((token.whitespace contains `\n`) not))
+					(do
+						(debug "Skipping " token)
+						(@token set (token tokenRightOf))
+					)
+				)
+				(if (token is nothing) nothing (token tokenRightOf))
+			)
+		)
+
+	# Generates a list of structures that may follow this token
+	fun List generateAutocompleteOptions [] 
+		(let [ refs List options = [] ]
+			(do
+				(this generateAutocompleteOptionsHelper options)
+				options
+			)
+		)
+		
+	fun Expansion getExpansionThisRepresents []
+		(let [ refs Structure structureOwner = (this ownerOfType Structure) ]
+			(if (structureOwner is nothing) 
+				nothing
+				(structureOwner.grammar getExpansionForProperty (this nameReferredToAs))
+			)
+		)
+		
+	fun Nothing generateAutocompleteOptionsHelper [ refs List options ]
+		# (1) Find the structure S that owns this token C
+		# (2) Find the expansion E of S's grammar that C represents
+		# (3) For each expansion O up the ownership hierarchy of E
+		#	If O is a Choice, next
+		#	If O is a ZeroOrMore or OneOrMore,
+		#		Generate an option based on O's expansion
+		#		next
+		#	If O is an Optional, next
+		#	If O is a Sequence
+		#		Get the expansion in O after the previous O
+		#		If there is no expansion after, next
+		#		Else 
+		#			Generate an option based on the remainder of the sequence
+		#			Stop
+		#	If O is a Production
+		#		(S generateAutocompleteOptions)
+		(let [
+			refs Structure structureOwner = (this ownerOfType Structure)
+			refs Expansion lastExpansion = nothing
+			refs Expansion expansion = (this getExpansionThisRepresents)
+			refs Bool looping = true
+			]
+			(do
+				(debug "Collecting options following " this)
+				(while looping
+					(do
+						(debug "Handling " expansion ", " (expansion toText) ", previous is " (lastExpansion toText))
+						(cond
+							(expansion isa Choice) true
+							((expansion isa ZeroOrMore) or (expansion isa OneOrMore))
+								(do
+									(expansion generateAutoCompleteActions expansion options structureOwner)
+									(debug "\tExecute " (expansion.expansion toText) " in " structureOwner " after " this)
+								)
+							(expansion isa Optional)
+								true
+							(expansion isa Sequence)
+								(let [ refs Expansion expansionAfter = (expansion.expansions itemAfter lastExpansion) ]
+									(if ((expansionAfter is nothing) not)
+										(do
+											(while (((expansionAfter is nothing) not) and (expansionAfter isOptional))
+												(do
+													(expansionAfter generateAutoCompleteActions expansionAfter options structureOwner)
+													(debug "\tExecute " (expansionAfter toText) " in " structureOwner)
+													(@expansionAfter set (expansion.expansions itemAfter expansionAfter))
+												)
+											)
+											# If we stopped because the next expansion wasn't optional, generate an option for it.
+											# and stop looping.
+											(if ((expansionAfter is nothing) not)
+												(do
+													(expansionAfter generateAutoCompleteActions expansionAfter options structureOwner)
+													(debug "\tExecute " (expansionAfter toText) " in " structureOwner)
+													# Halt the looping.
+													(@looping set false)
+												)
+												# Otherwise, we continue looping.
+											)
+											
+										)
+									)
+								)
+							(expansion isa Production)
+								(do
+									(structureOwner generateAutocompleteOptionsHelper options)
+									(@looping set false)
+								)
+							(expansion isa NonTerminal)
+								(if (expansion.type isTerminal) 
+									true
+									(debug "\tShould be determining what may following " this " in " expansion.type)
+								)
+							true 
+								(do
+#									(debug "Found " expansion "; stopping")
+									(@looping set false)
+								)
+						)
+						(@lastExpansion set expansion)
+						(@expansion set (lastExpansion ownerOfType Expansion))
+					)
+				)
+#				(debug "Done handling " this)
+			)
+		)
+						
+.
+
+a Token is an abstract Structure that
+
+	fun Text toText [] token
+
+	fun static Bool isMutable [] false
+	fun static Bool isTerminal [] true
+	fun Token directionTokenIn [ refs Bool direction ] this
+
+	refs Set tokensExpectedAfter = {}
+	fun Nothing addExpected [ refs Type t ] (tokensExpectedAfter add t)
+	fun Set<Token> whitespaceCompletions [] tokensExpectedAfter
+	fun Set<Token> tokenCompletions [] {}
+		
+.
+

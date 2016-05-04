@@ -1,0 +1,65 @@
+language Windows
+
+uses "edu.cmu.hcii.citrus"uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.paint"uses "edu.cmu.hcii.citrus.views.layout"
+
+a Classic is a Style that
+
+	has Real padding = 3.0
+	has Real linesSpacing = 3.0
+	has Real horizontalSpacing = 4.0
+	has Real indentation = 10.0
+	has Real keyboardFocusStrokeWidth = 3.0
+	has Real textFieldPadding = 2.0
+
+	has FontFace plainFont = (a FontFace family="Arial" size=12.0)
+	has FontFace biggerPlainFont = (a FontFace family="Lucida Grande" size=14.0)
+	has FontFace italicFont = (a FontFace family="Arial" style="italic")
+	has FontFace biggerItalicFont = (a FontFace family="Arial" style="italic" size=14.0)
+	has FontFace boldFont = (a FontFace family="Geneva" style="bold")
+	has FontFace biggerBoldFont = (a FontFace family="Geneva" style="bold" size=14.0)
+	has FontFace fixedWidthFont = (a FontFace family="Courier New")
+	has FontFace headerFont = (a FontFace family="Arial" style="bold" size=16.0)
+	has FontFace smallFont = (a FontFace family="Lucida Grande" size=8.0)
+
+	has Color fontColor = (a Color r=0.0 g=0.0 b=0.0)
+	has Color darkerColor = (a Color r=251.0 g=154.0 b=31.0)
+	has Color lightColor = (a Color r=253.0 g=219.0 b=148.0)
+	has Color lighterColor = (a Color r=255.0 g=245.0 b=207.0)
+	has Color selectionColor = (a Color r=255.0 g=245.0 b=0.0)
+	has Color keyboardFocusColor = (a Color r=94.0 g=110.0 b=255.0)
+	has Color errorColor = (a Color r=255.0 g=0.0 b=0.0 alpha=85.0)
+	has Color dropFeedbackColor = (a Color r=0.0 g=255.0 b=0.0)
+	has Color white = (a Color r=255.0 g=255.0 b=255.0)
+	has Color grey = (a Color r=255.0 g=255.0 b=255.0)
+	has Color black = (a Color r=0.0 g=0.0 b=0.0)
+	has Color lightGrey = (a Color r=200.0 g=200.0 b=200.0)
+
+	has Paint textBackgroundPaint =
+		(a PaintPaint paint= [
+			(a FilledRectanglePaint primaryColor=white secondaryColor=white left=-2.0 top=-2.0 right=-2.0 bottom=-2.0)
+			(a FilledRectanglePaint primaryColor=grey  secondaryColor=grey  left=-2.0 top=-2.0 right=-1.0 bottom=-1.0)
+			(a FilledRectanglePaint primaryColor=lightGrey secondaryColor=lightGrey left=-1.0 top=-1.0 right=-1.0 bottom=-1.0)
+			(a FilledRectanglePaint primaryColor=black secondaryColor=black left=-1.0 top=-1.0 right=0.0 bottom=0.0)
+			(a FilledRectanglePaint primaryColor=white secondaryColor=white left=0.0 top=0.0 right=0.0 bottom=0.0)])
+
+	has Paint textFieldErrorPaint = (a FilledRectanglePaint primaryColor=errorColor secondaryColor=errorColor)
+
+	has Paint buttonUpPaint = (a PaintPaint paint=[
+		(a FilledRectanglePaint primaryColor=black secondaryColor=black left=-1.0 top=-1.0 right=-2.0 bottom=-2.0)
+		(a FilledRectanglePaint primaryColor=white secondaryColor=white left=-1.0 top=-1.0 right=-1.0 bottom=-1.0)
+		(a FilledRectanglePaint primaryColor=grey secondaryColor=grey left=0.0 top=0.0 right=-1.0 bottom=-1.0)
+		(a FilledRectanglePaint primaryColor=lightGrey secondaryColor=lightGrey left=0.0 top=0.0 right=0.0 bottom=0.0)
+	])
+
+	has Paint buttonDownInPaint = (a PaintPaint paint=[
+		(a FilledRectanglePaint primaryColor=white secondaryColor=white left=-1.0 top=-1.0 right=-2.0 bottom=-2.0)
+		(a FilledRectanglePaint primaryColor=black secondaryColor=black left=-1.0 top=-1.0 right=-1.0 bottom=-1.0)
+		(a FilledRectanglePaint primaryColor=grey secondaryColor=grey left=0.0 top=0.0 right=-1.0 bottom=-1.0)
+		(a FilledRectanglePaint primaryColor=grey secondaryColor=grey left=0.0 top=0.0 right=0.0 bottom=0.0)
+	])
+
+	has Paint buttonDownOutPaint = (a PaintPaint paint=[
+		(a FilledRectanglePaint cornerWidth=15.0 cornerHeight=15.0 primaryColor=lightGrey secondaryColor=lightGrey)		(a RectanglePaint cornerWidth=15.0 cornerHeight=15.0 primaryColor=grey)
+	])
+.

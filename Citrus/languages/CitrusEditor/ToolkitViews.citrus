@@ -1,0 +1,1045 @@
+language CitrusEditor
+
+# We import citrus since we're making views
+uses "edu.cmu.hcii.citrus"
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+init
+(do
+	
+	(CitrusEditor extractViews)
+	((an ViewEditorWindow viewType=(a Type)) show)
+)
+
+an ViewEditorWindow is an App that
+
+	has Type viewType = ?
+	has Real width = 640.0
+	has Real height = 480.0
+	
+	has List<View> children = [ (a ViewTypeView model=viewType) ]
+
+.
+
+a ViewTypeView is an View that
+
+	# The type that we're editing
+	refs Type model = ?
+
+	# The type or inner type of the type that is currently selected
+	refs Type selection = model
+
+	refs Element modelInstance = (a (model getDeclarationOf "model").typeExpression.type)
+
+#	// Make an instance of the view, passing the model we just created.
+#	ArgumentList args = new ArgumentList();		
+#	args.add("model", get(modelInstance));
+#	Translator.noTranslation = true;
+#	set(viewInstance, (ElementView)get(model).instantiate(args));
+#	get(viewInstance).get(children);
+#	get(viewInstance).set(enabled, new Bool(false));
+#	Translator.noTranslation = false;
+	refs ElementView viewInstance = (a model model=modelInstance enabled=false)
+	
+	has Layout layout = (a VerticalLayout)
+
+	has Real width <- (this parentsWidth)
+	has Real height <- (this parentsHeight)
+
+	has static RectanglePaint selectionBorder = 
+		(a RectanglePaint 
+			primaryColor=(a Color r=0.0 g=0.0 b=255.0)
+			alpha=0.5
+			stroke=4.0
+			left=-2.0 right=-2.0 top=-2.0 bottom=-2.0
+		)
+		
+	has List<View> children = [
+		(a Header)
+		(a Editors)
+	]
+	
+#	// Add the listeners to the selection property for each of the sub panels.
+#	getPropertyByDeclaration(selection).addListener(getFirstChildOfType(PropertyEditor.class).selectionListener);
+#	getPropertyByDeclaration(selection).addListener(getFirstChildOfType(PaintEditor.class).selectionListener);
+#	getPropertyByDeclaration(selection).addListener(getFirstChildOfType(BehaviorEditor.class).selectionListener);
+#	getPropertyByDeclaration(selection).addListener(getFirstChildOfType(ChildrenEditor.class).selectionListener);
+#	getPropertyByDeclaration(selection).addListener(getFirstChildOfType(ViewPreview.class).selectionListener);
+
+	fun Nothing disableChildren [ refs View t ]
+		nothing		
+#		t.set(enabled, new Bool(false));
+#		for(View child : t.get(children)) disableChildren(child);
+
+	fun Nothing findTileOfType [ refs View t refs Namespace type ]
+		nothing
+#		if(t.getType() == type) return t;
+#		View returnTile = null;
+#		for(View child : t.get(children)) {
+#			returnTile = findTileOfType(child, type);
+#			if(returnTile != null) return returnTile;
+#		}
+#		return null;
+
+	fun ElementView getViewInstance [] viewInstance
+	fun Type getViewType [] model
+
+	a Header is a View that 
+
+		has Layout layout = (a HorizontalLayout spacing=5.0)
+
+		has Real width <- (this parentsWidth)
+		has Real height <- (this tallestChildsHeight)
+
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+
+		has List<Paint> background = [(this getStyle).lighterBackgroundPaint]
+		
+		has List<View> children = [
+			(a Label text="a")
+			(a TextField property=model.@name font=(this getStyle).headerFont)
+			(a Label text="is a")
+			(a TextField property=model.@prototype font=(this getStyle).headerFont)
+			(a Button label=(a Label text="Save") action='(model write "Blah"))
+#				ElementWriter.writeElementToFile(Language.getViewsPathname() + edType.getLanguageName() + java.io.File.separator +
+#				   type.get(BaseType.name) + 
+#				   ".element", 
+#				   type);
+			(a Button label=(a Label text="Test"))
+#				Window w = new Window("Test", true, 400, 400);
+#				w.set(View.layout, new CenteredLayout(0));
+#				
+#				BaseType type = t.getParent().get(model);
+#				type.consolidate();
+#				
+#				// Assume this is an element view and make an element for it to be a view of.
+#				Dec ed = type.getDeclarationOf(ElementView.model);
+#				Type edType = ed.get(DeclaDec);
+#				Element elementToView = edType.make(null);
+#				ArgumentList args = new ArgumentList();
+#				args.put(ed, elementToView);			
+#				View newTile = (View)type.make(args);
+#				
+#				w.addChild(newTile);
+#				App.show(w);
+		]
+
+	.
+
+
+	an Editors is a View that 
+
+		has Real width <- (this parentsWidth)
+		has Real height <- (this parentsRemainingHeight)
+
+		has List<View> children = [
+			(a SplitView vertical=true split=0.4
+				one=
+				(a SplitView vertical=false split=0.33
+					one=(a ViewPreview instance=viewInstance)
+					two=(a SplitView vertical=false split=0.5
+						one=(a ChildrenEditor type=model)
+						two=(a PaintEditor))
+				)
+				two=
+					(a SplitView vertical=false split=0.5
+						one=(a PropertyEditor)
+						two=(a BehaviorEditor)
+					)
+			)
+		]
+
+	.
+
+.
+
+a PropertyEditor is a View that
+
+	has Layout layout = (a VerticalLayout)
+	has Real width <- (this parentsWidth)
+	has Real height <- (this parentsHeight)
+
+	has List<View> children = [ (a Header) ]
+
+	
+#	private Hashtable<Namespace,View> propertyPanesByType = new Hashtable<Namespace,View>();
+#
+#	public final Listener selectionListener = new ListenerAdapter() {
+#		public void changed(Property p, Transition t, Element oldValue, Element newValue) {
+#
+#			View replacementPane = propertyPanesByType.get(newValue);
+#			if(replacementPane == null) {
+#				ArgumentList args = new ArgumentList();
+#				args.add("type", newValue);
+#				args.enclosingEnvironment = PropertyEditor.this;
+#				replacementPane = (View)Reflection.getJavaType(Body.class).instantiate(args);
+#				args = new ArgumentList();
+#				args.add("viewToScroll", replacementPane);
+#				replacementPane = new ScrollView(null, args);
+#				propertyPanesByType.put((Namespace)newValue, replacementPane);
+#			}
+#			if(get(children).nth(new Int(2)) != null) get(children).nth(new Int(2)).remove();
+#			PropertyEditor.this.get(children).append(replacementPane);
+#			
+#		}
+#	};
+
+	a Header is a View that
+	
+		has Layout layout = (a HorizontalLayout spacing=5.0)
+
+		has Real width <- (this parentsWidth)
+		has Real height <- (this tallestChildsHeight)
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+
+		has List<Paint> background = [(this getStyle).lighterBackgroundPaint]
+		
+		has List<View> children = [
+			(a Label text="Properties" font=(this getStyle).headerFont)
+			(a Duplicator label=(a Label text="New Property" font=(this getStyle).italicFont) elementToDuplicate=(a Dec valueExpression=(a Ref)))
+		]
+
+	.
+
+	a Body is a View that
+	
+		refs Type type = ?
+
+		has Layout layout = (a VerticalLayout indentation=5.0 spacing=2.0)
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this lastChildsBottom)
+		
+		has List<View> children = [(a ViewDecListView model=type.properties)]
+
+#		when type.@properties valueChanged implicitly [ has Property property has Bool newValue ]
+#			(this updateInstanceWith property newValue)
+		
+#		public Nothing updateInstanceWith(Property p, Element newValue) {
+#
+#			// Which declaration owns this property?
+#			DecInterface<?> dec = (DecInterface)p.ownerOfType(Boot.DECLARATION);
+#			
+#			if(dec == null) return null;
+#
+#			if(dec.getName().equals("behaviors")) {
+#				return null;
+#			}
+#			
+#			// Set the corresponding property in the instance.
+#			ViewTypeView viewTypeView = getOwnerOfType(ViewTypeView.class);
+#			if(viewTypeView == null) {
+#				return null;
+#			}
+#			
+#			View viewInstance = viewTypeView.get(ViewTypeView.viewInstance);
+#			
+#			// Try evaluating the expression
+#			boolean succeeded = false;
+#			try {
+#				Element value = dec.getValueFunction().evaluate(viewInstance);
+#				succeeded = value.getType().isTypeOf(dec.getTypeExpression().getBaseType()).value;
+#			} catch(Exception e) {}
+#
+#			if(succeeded) {
+#				System.err.println("Reinitialization succeeded! New value is " + viewInstance.get(dec));
+#				Property property = viewInstance.getProperty(dec.getName());
+#				property.initialize(null, false, getStyle().getQuickerTransition());
+#			}
+#			
+#			return null;
+#			
+#		}
+
+	.
+	
+.
+
+a PaintEditor is a View that
+
+	has Layout layout = (a VerticalLayout)
+	has Real width <- (this parentsWidth)
+	has Real height <- (this parentsHeight)
+
+	has List<View> children = [
+		(a Toolbar tools=[
+			(a Label text="Graphics" font=(this getStyle).headerFont)
+			(a Maker typeToMake=FilledRectanglePaint label=(a View width=25.0 height=25.0 background=[(a FilledRectanglePaint)]))
+			(a Maker typeToMake=RectanglePaint label=(a View width=25.0 height=25.0 background=[(a RectanglePaint)]))
+			(a Maker typeToMake=LinePaint label=(a View width=25.0 height=25.0 background=[(a LinePaint)]))
+			(a Maker typeToMake=EllipsePaint label=(a View width=25.0 height=25.0 background=[(a EllipsePaint)]))
+			(a Maker typeToMake=PolygonPaint label=(a View width=25.0 height=25.0 background=[(a PolygonPaint points=[(a Point x=0.5 y=0.0) (a Point x=1.0 y=0.5) (a Point x=0.5 y=1.0) (a Point x=0.0 y=0.5)])]))
+			(a Maker typeToMake=ArcPaint label=(a View width=25.0 height=25.0 background=[(a ArcPaint)]))
+			(a Maker typeToMake=GridPaint label=(a View width=25.0 height=25.0 background=[(a GridPaint)]))
+		])
+	]
+
+#	// All of the various paint paints by the type
+#	private Hashtable<Namespace,View> paintPanesByType = new Hashtable<Namespace,View>();
+#	
+#	// When the type selection changes, place the appropriate pane.
+#	public final Listener selectionListener = new ListenerAdapter() {
+#		public void changed(Property p, Transition t, Element oldValue, Element newValue) {
+#
+#			View replacementPane = paintPanesByType.get(newValue);
+#			if(replacementPane == null) {
+#				ArgumentList args = new ArgumentList();
+#				args.add("type", newValue);
+#				replacementPane = new Body(args);
+#				args = new ArgumentList();
+#				args.add("viewToScroll", replacementPane);
+#				replacementPane = new ScrollView(null, args);
+#				paintPanesByType.put((Namespace)newValue, replacementPane);
+#			}
+#			if(get(children).nth(new Int(2)) != null) get(children).nth(new Int(2)).remove();
+#			PaintEditor.this.get(children).append(replacementPane);
+#			
+#		}
+#	};
+
+	a Header is a View that
+
+		has Layout layout = (a HorizontalLayout spacing=5.0)
+
+		has Real width <- (this parentsWidth)
+		has Real height <- (this tallestChildsHeight)
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+
+		has List<Paint> background = [(this getStyle).lighterBackgroundPaint]
+		
+		has List<View> children = [
+			(a Toolbar tools=[
+				(a Label text="Graphics" font=(this getStyle).headerFont)
+				(a Maker typeToMake=FilledRectanglePaint label=(a View width=25.0 height=25.0 background=[(a FilledRectanglePaint)]))
+				(a Maker typeToMake=RectanglePaint label=(a View width=25.0 height=25.0 background=[(a RectanglePaint)]))
+				(a Maker typeToMake=LinePaint label=(a View width=25.0 height=25.0 background=[(a LinePaint)]))
+				(a Maker typeToMake=GridPaint label=(a View width=25.0 height=25.0 background=[(a GridPaint)]))
+			])
+		]
+
+	.
+
+	a Body is a View that
+
+		refs Namespace type = ?
+
+		has Layout layout = (a VerticalLayout spacing=10.0)
+		has Real width <- (this parentsWidth)
+		has Real height <- (this parentsHeight)
+		
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+
+		has Bool clipsChildren = false
+
+		has List<View> children = [
+			(a Label text="Background" font=(this getStyle).headerFont)
+			((type getDeclarationOf "background").@valueExpression toView)
+			(a Label text="Content" font=(this getStyle).headerFont)
+			((type getDeclarationOf "content").@valueExpression toView)
+			(a Label text="Foreground" font=(this getStyle).headerFont)
+			((type getDeclarationOf "foreground").@valueExpression toView)
+		]
+		
+	.
+	
+.
+
+
+a BehaviorEditor is a View that
+
+	has Layout layout = (a VerticalLayout)
+	has Real width <- (this parentsWidth)
+	has Real height <- (this parentsHeight)
+
+	has List<View> children = [
+		(a Toolbar vertical=false tools=[
+			(a Label text="Behaviors" font=(this getStyle).headerFont)
+			(a Duplicator 
+				label=(a Label text="Behavior" font=(this getStyle).italicFont) 
+				elementToDuplicate=
+				(an Evaluate 
+					functionContext=(a Ref token="a") 
+					function=(a Ref token="Behavior") 
+					arguments=
+						[
+							(an Arg param="event" value=(a Ref)) 
+							(an Arg param="action" 
+								value=(a Quote value=(an Evaluate 
+									functionContext=(a Ref token="do") 
+									arguments=[
+										(an Arg value=(a Ref)) (an Arg value=(a BoolLiteral token="true"))])))]))
+			(a Duplicator 
+				label=(a Label text="Keyboard Typed" font=(this getStyle).italicFont) 
+				elementToDuplicate=
+				(an Evaluate 
+					functionContext=(a Ref token="a") 
+					function=(a Ref token="Behavior") 
+					arguments=
+						[
+							(an Arg param="event" value=
+								(an Evaluate 
+									functionContext=(a Ref token="a") 
+									function=(a Possessive possessor=(a Ref token="Keyboard") possession=(a Ref token="Typed")))) 
+							(an Arg param="action" 
+								value=(a Quote value=(an Evaluate 
+									functionContext=(a Ref token="do") 
+									arguments=[
+										(an Arg value=(a Ref)) (an Arg value=(a BoolLiteral token="true"))])))]))
+			(a Duplicator label=(a Label text="Mouse Clicked" font=(this getStyle).italicFont) elementToDuplicate=(an Evaluate))
+			(a Duplicator label=(a Label text="Mouse Moved" font=(this getStyle).italicFont) elementToDuplicate=(an Evaluate))
+		])
+	]
+
+#	private Hashtable<Namespace,View> behaviorPanesByType = new Hashtable<Namespace,View>();
+	
+#	public final Listener selectionListener = new ListenerAdapter() {
+#		public void changed(Property p, Transition t, Element oldValue, Element newValue) {
+#
+#			View replacementPane = behaviorPanesByType.get(newValue);
+#			if(replacementPane == null) {
+#				ArgumentList args = new ArgumentList();
+#				args.add("type", newValue);
+#				replacementPane = new Body(args);
+#				args = new ArgumentList();
+#				args.add("viewToScroll", replacementPane);
+#				replacementPane = new ScrollView(null, args);
+#				behaviorPanesByType.put((Namespace)newValue, replacementPane);
+#			}
+#			if(get(children).nth(new Int(2)) != null) get(children).nth(new Int(2)).remove();
+#			BehaviorEditor.this.get(children).append(replacementPane);
+#			
+#		}
+#	};
+
+	a Body is a View that
+
+		refs Namespace type = ?
+
+		has Real width <- (this parentsWidth)
+		has Real height <- (this parentsHeight)
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+		has Bool clipsChildren = false
+
+		has List<View> children = [
+			(a BehaviorListView
+				property=(type getDeclarationOf "behaviors").valueExpression.@items
+				model=(type getDeclarationOf "behaviors").valueExpression.items
+			)
+		]
+
+	.
+	
+.
+
+a BehaviorListView is a ListView that
+
+	refs List<Behavior> model = ?
+
+	has Layout layout = (a VerticalLayout spacing=2.0)
+	has Real width <- (if (model isEmpty) 150.0 (this rightmostChildsRight))
+	has Real height <- (if (model isEmpty) 150.0 (this lastChildsBottom)) 
+	
+	has Real hPad = 3.0
+	has Real vPad = 3.0
+
+#	public BehaviorListView(ArgumentList arguments) { super(arguments); 
+#	
+#		get(property).addView(this);
+#	
+#	}
+
+.
+
+
+a BehaviorView is an ElementView that
+
+	refs Behavior model = ?
+
+	refs Bool clipsChildren = false
+	refs Bool collapse = false
+	has Real hPad = 5.0
+	has Real vPad = 2.0
+	has Layout layout = (a VerticalLayout)
+	
+	has Real width <-
+		(if collapse ((children first) rightmostChildsRight) (this rightmostChildsRight))
+	has Real height <- (this lastChildsBottom)
+	
+	has List<Paint> background = [ (a RectanglePaint primaryColor=(a Color r=225.0 g=225.0 b=225.0) cornerWidth=5.0 cornerHeight=5.0) ]
+
+	has List<Behavior> behaviors = [
+		(a Draggable)
+		(a Navigable)
+#		new Behavior(App.keyboard.DOWN.pressed, App.keyboard.focusBelow),
+#		new Behavior(App.keyboard.UP.pressed, App.keyboard.focusAbove),
+	]
+
+	has List<View> children = [
+		(a Header)
+		(a Body)
+	]
+
+	a Header is a View that 
+
+		has Layout layout = (a HorizontalLayout spacing=5.0)
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		
+		has List<View> children = [
+			(a Label text="when" font=(this getStyle).italicFont)
+			(model.@event toView)
+		]
+
+	.
+
+	a Body is a View that 
+
+		has Bool hidden <- collapse
+
+		has Layout layout = (a VerticalLayout spacing=5.0)
+
+		has Real width <- (this widestChildsWidth)
+		has Real height <- (this lastChildsBottom)
+		
+		has List<View> children = [(model.@action toView)]
+		
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+		
+	.
+	
+.
+	
+a ChildrenEditor is a View that
+
+	refs Namespace type = ?
+	
+	has Bool clipsChildren = false
+
+	has Layout layout = (a VerticalLayout)
+	
+	has Real width <- (this parentsWidth)
+	has Real height <- (this parentsHeight)
+	
+	has List<View> children = [(a Header)]
+
+#	private Hashtable<Namespace,View> childrenPanesByType = new Hashtable<Namespace,View>();
+	
+#	public final Listener selectionListener = new ListenerAdapter() {
+#		public void changed(Property p, Transition t, Element oldValue, Element newValue) {
+#
+#			View replacementPane = childrenPanesByType.get(newValue);
+#			if(replacementPane == null) {
+#				ArgumentList args = new ArgumentList();
+#				args.add("type", newValue);
+#				replacementPane = new Body(args);
+#				args = new ArgumentList();
+#				args.add("viewToScroll", replacementPane);
+#				replacementPane = new ScrollView(null, args);
+#				childrenPanesByType.put((Namespace)newValue, replacementPane);
+#			}
+#			if(get(children).nth(new Int(2)) != null) get(children).nth(new Int(2)).remove();
+#			ChildrenEditor.this.get(children).append(replacementPane);
+#			
+#		}
+#	};
+
+
+	a Header is a View that
+
+		has Layout layout = (a HorizontalLayout spacing=5.0)
+		has Real width <- (this parentsWidth)
+		has Real height <- (this tallestChildsHeight)
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+
+		has List<Paint> background = [(this getStyle).lighterBackgroundPaint]
+
+		has List<View> children = [
+			(a Label text="Children" font=(this getStyle).headerFont)
+		]
+		
+	.
+	
+	a Body is a View that 
+
+		refs Namespace type = ?
+		
+		has Bool clipsChildren = false
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+		has Real width <- (this parentsWidth)
+		has Real height <- (this parentsHeight)
+		
+		has List<Behavior> behaviors = [
+			(a Behavior event=(a MouseButton.Pressed)
+#					ViewTypeView ted = (V)ownerOfType(Reflection.getJavaType(ViewTypeView.class));
+#//					ted.getSelectionProperty().set(ted.getViewInstance());
+#					return true;
+			)
+		]
+
+		has List<View> children = [
+			((type getDeclarationOf "children").valueExpression.@items toView)
+		]
+		
+	.
+
+.
+
+
+a ColorReferenceView is a ReferenceView that
+
+	refs Color model = ?
+	
+	has Real width = 40.0
+	has Real height = 20.0
+	
+	has List<Paint> background = [
+		(a FilledRectanglePaint primaryColor=model secondaryColor=model)
+	]
+
+.
+
+a LayoutView is an ElementView that
+
+	refs Layout model = ?
+
+	has Layout layout = (a HorizontalLayout spacing=2.0)
+
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	
+	has List<Paint> background = [(this getStyle).lighterBackgroundPaint]
+	
+	has Real hPad = 5.0
+	has Real vPad = 5.0
+
+#	// These were for Vertical Layout
+#	  	public static final Dec<List<View>> children = new Dec<List<View>>(View.children,
+#		make(Label.class, arg(Label.text, string("Vertical\nLayout")), arg(Label.font, getStyleProperty(Style.plainFont))),
+#		make(PropertyPopupMenu.class, arg(PropertyPopupMenu.property, dot(model, getProp(VerticalLayout.alignment)))),
+#		make(ParsedTextField.class, arg(ParsedTextField.model, dot(model, getProp(VerticalLayout.indentation)))),
+#		make(ParsedTextField.class, arg(ParsedTextField.model, dot(model, getProp(VerticalLayout.spacing)))));
+
+#//Horizontal
+# 	public static final Dec<List<View>> children = new Dec<List<View>>(View.children,
+#		make(Label.class, arg(Label.text, string("Horizontal\nlayout")), arg(Label.font, getStyleProperty(Style.plainFont))),
+#		make(PropertyPopupMenu.class, arg(PropertyPopupMenu.property, dot(model, getProp(HorizontalLayout.alignment)))),
+#		make(ParsedTextField.class, arg(ParsedTextField.model, dot(model, getProp(HorizontalLayout.spacing)))));
+#
+	
+.
+
+
+a PaintView is an ElementView that
+
+	refs Paint model = ?
+
+	has Layout layout = (a HorizontalLayout spacing = 3.0)
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this tallestChildsHeight)
+
+	has Real scale = 0.75
+	has Real hPad = 5.0
+	has Real vPad = 5.0
+	
+	has Bool focusable = true
+
+#	has Paint background = [ (a FilledRectanglePaint
+
+	has List<View> children = [ (a Preview) ]
+	has List<Behavior> behaviors = [ (a Draggable) ]
+
+	a Preview is a View that
+	
+		has Real width = 48.0
+		has Real height = 48.0
+		
+		has List<Paint> background = [ model ]
+
+	.
+	
+.
+
+a ShapeView is an ElementView that
+
+	refs Shape model = ?
+	
+	has Real width = 48.0
+	has Real height = 48.0
+
+	has List<Paint> background = [ (a RectanglePaint primaryColor=(a Color r=0.0 g=0.0 b=0.0)) ]
+
+.
+
+a ViewDecListView is a ListView that
+
+	refs List model = ?
+	
+	has Layout layout = (a VerticalLayout spacing=2.0)
+	has Real hPad = 3.0
+	has Real vPad = 3.0
+	
+#// Hack to get property to update this view
+#		get(model).getPropertyOwner().addView(this);
+
+	fun Bool include [ refs Element item ]
+		((item.typeExpression.type isa List) not)
+
+.
+
+a ViewSelection is a View that
+
+	refs View selection = ?
+
+	has Real left <- (if (selection is nothing) 0.0 selection.left)
+	has Real top <- (if (selection is nothing) 0.0 selection.top)
+	has Real width <- (if (selection is nothing) 0.0 selection.width)
+	has Real height <- (if (selection is nothing) 0.0 selection.height)
+	has Bool focusable = false
+
+	has List<Paint> background = [(a RectanglePaint primaryColor=(a Color r=0.0 g=0.0 b=255.0) stroke=2.0 alpha=0.8)]
+
+#	public final Listener selectionListener = new ListenerAdapter() {
+#		public void changed(Property p, Transition t, Element oldValue, Element newValue) {
+#			System.err.println("New value is " + newValue);
+#			if(newValue instanceof Namespace) set(selection, (View)ViewSelection.this.getParent().getFirstChildOfType((Namespace)newValue));
+#			else set(selection, null);
+#			System.err.println("Selection is " + get(selection));
+#		}
+#	};
+	
+.
+
+a ViewPreview is a View that
+
+	refs View instance = ?
+
+	has Layout layout = (a VerticalLayout)
+	has Real width <- (this parentsWidth)
+	has Real height <- (this parentsHeight)
+
+	has List<Paint> background = [ (a GridPaint alpha=0.5 step=20.0) ]
+
+	has List<View> children = [
+		(a Toolbar vertical=false tools=[
+			(a Label text="Preview" font=(this getStyle).headerFont)
+			(a Subtyper typeToSubtype=View enclosingInstance=instance)
+			(a Subtyper typeToSubtype=Checkbox enclosingInstance=instance)
+			(a Subtyper typeToSubtype=TextField enclosingInstance=instance)
+			(a Subtyper typeToSubtype=Label enclosingInstance=instance)
+			(a Subtyper typeToSubtype=ScrollView enclosingInstance=instance)
+			(a Subtyper typeToSubtype=Toggle enclosingInstance=instance)
+		])
+		(a ScrollView viewToScroll=(a Preview))
+	]
+
+#	public final Listener selectionListener = new ListenerAdapter() {
+#		public void changed(Property p, Transition t, Element oldValue, Element newValue) {
+#			
+#			View viewInstance = (View)ViewPreview.this.getFirstChildOfType((Namespace)newValue);
+#			ViewPreview.this.getFirstChildOfType(SelectionHandles.class).set(SelectionHandles.selection, viewInstance);
+#
+#		}
+#	};
+
+	an InstanceContainer is a View that
+	
+		has List<View> children = [ instance ]
+
+		has Real width <- (this parentsWidth)
+		has Real height <- (this parentsHeight)
+
+	.
+
+	a Preview is a View that
+
+		refs View viewUnderCursor = nothing
+
+		has List<View> children = [ (an InstanceContainer) (a SelectionHandles) ]
+
+#		has List<Paint> background = [
+#			(a RectanglePaint primaryColor=(a (Color.grey, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0, 0),
+#			new FilledRectanglePaint(Color.lightGrey, .25, 0.0, 0.0, 0.0, 0.0, 0, 0)));
+		
+#//		public static final Dec<List<Paint>> content = new Dec<List<Paint>>("[(a TextPaint text=\"Parent\" new NewList<Paint>(
+#//			new TextPaint("Parent", App.getGlobalStyle().get(Style.headerFont), Color.grey, 0.5, false, TextLayout.CENTERED, TextPaint.VERTICALLY_CENTERED)));
+
+		has Real left <-
+			(if (parent is nothing) 
+				0.0
+				((parent.width minus (this paddedWidth)) divide 2.0)
+			)
+
+		has Real top <-
+			(if (parent is nothing) 
+				0.0
+				((parent.height minus (this paddedHeight)) divide 2.0)
+			)
+
+		has Real width <- ((this parentsWidth) times 0.75)
+		has Real height <- ((this parentsHeight) times 0.75)
+
+		has Bool clipsChildren = false
+
+#		public static final Dec<List<Behavior>> behaviors = new Dec<List<Behavior>>(new List<Behavior>(
+#				
+#			new Behavior(App.mouse.leftButton.pressed, new Action() { public boolean evaluate(View t) {
+#
+#				View viewInstance = t.get(instance);
+#				View newSelection = null;
+#				for(View v : App.getViewsUnderCursor()) {
+#					// If the view instance is clicked, or one of its children for whom the instance's type has a type, select it.
+#					if(v == viewInstance || 
+#						(v.isDescendantOf(viewInstance).value && 
+#						viewInstance.getType().get(BaseType.types).contains((Type)v.getType()).value)) {
+#						newSelection = v;
+#						break;
+#					}
+#				}
+#				
+#				System.err.println("Selection is " + newSelection);
+#				// If we found a satisfactory view, select it.
+#				if(newSelection != null)
+#					t.getOwnerOfType(ViewTypeView.class).set(ViewTypeView.selection, (Type)newSelection.getType());					
+#				return true;
+#
+#			}}),
+			
+#			new Behavior(App.mouse.pointer.draggedIn, new Action() { 
+#				public boolean evaluate(View t) {
+#					return true;
+#				}}),
+
+#			// When dragged over, highlight the thing that will be dropped on
+#			new Behavior(App.mouse.pointer.draggedOver, new Action() { public boolean evaluate(View t) {
+#
+#				Preview vp = (Preview)t;
+#
+#				View preview = t.get(instance);
+#		
+#				// Make sure the element picked is an element view.
+#				View pick = App.mouse.pointer.getViewPicked();
+#
+#				// What is this being dropped over? Find the first descendant of the view that is of a type 
+#				// contained in this preview's type's type list.
+#				
+#				View viewUnderCursor = null;
+#				for(View view : App.getViewsUnderViewPicked()) {
+#					if(view == preview || 
+#						(view.isDescendantOf(preview).value && preview.getType().get(BaseType.types).contains((Type)pick.getType()).value)) {
+#						viewUnderCursor = view;
+#						break;
+#					}
+#				}
+#				if(viewUnderCursor != null)
+#					viewUnderCursor.addForegroundPaint(App.getGlobalStyle().getReplaceFeedback());
+#				
+#				if(vp.viewUnderCursor != viewUnderCursor && vp.viewUnderCursor != null)
+#					vp.viewUnderCursor.removeForegroundPaint(App.getGlobalStyle().getReplaceFeedback());
+#				vp.viewUnderCursor = viewUnderCursor;
+#					
+#
+#				return true;
+#					
+#			}}),
+
+#			new Behavior(App.mouse.pointer.draggedOut, new Action() { 
+#				public boolean evaluate(View t) {
+#					Preview vp = (Preview)t;
+#					if(vp.viewUnderCursor != null)
+#						vp.viewUnderCursor.removeForegroundPaint(App.getGlobalStyle().getReplaceFeedback());
+#					return true;
+#			}}),
+
+#			// Assume that the element is not in a list.
+#			new Behavior(App.mouse.pointer.droppedOver, new Action() { 
+#				public boolean evaluate(View t) {
+#					
+#					Preview vp = (Preview)t;
+#	
+#					View pick = App.mouse.pointer.getViewPicked();
+#
+#					if(vp.viewUnderCursor != null) {
+#	
+#						vp.viewUnderCursor.removeForegroundPaint(App.getGlobalStyle().getReplaceFeedback());
+#	
+#						// Find the default children list for the type.
+#						Type viewType = (Type)vp.viewUnderCursor.getType();
+#						DecInterface childrenDeclaration = null;
+#						
+#						for(DecInterface dec : viewType.getDeclarationsDeclared()) {
+#							if(dec.getName().equals(View.children.getName())) {
+#								childrenDeclaration = dec;
+#								break;
+#							}
+#						}
+#						// If this type doesn't override children, make it override it now.
+#						if(childrenDeclaration == null) {
+#						
+#							System.err.println("Warning: children is not overriden by " + viewType);
+#							
+#						} else {
+#							
+#							List newItems = childrenDeclaration.get(Dec.valueExpression).get(NewList.items);
+#							System.err.println("Currently has items " + newItems);
+#
+#							// Where was it dropped, relative to the tile being dropped over?
+#							java.awt.geom.Point2D global = App.mouse.pointer.getPosition();
+#							java.awt.geom.Point2D local = vp.viewUnderCursor.globalToLocal(global);
+#							
+#							String makeExpression = "";
+#							if(pick.getType().isTypeOf(Reflection.getJavaType(ElementView.class)).value)
+#								makeExpression = "(a " + pick.getType().getName() + " property=model.@" + pick.get(ElementView.property).getDeclaration().getName() + ")";
+#							else makeExpression = "(a " + pick.getType().getName() + ")";
+#
+#							Evaluate<?> eval = new Evaluate(new Ref("a"), new Ref(pick.getType().getName()));
+#							if(pick.getType().isTypeOf(Reflection.getJavaType(ElementView.class)).value)
+#								eval.get(Evaluate.arguments).append(new Arg("property", false, 
+#										CitrusParser.parse("model.@" + pick.get(ElementView.property).getDeclaration().getName())));
+#							
+#							// This would override the default constraint
+#//							eval.get(Evaluate.arguments).append(new Arg("left", false, new RealLiteral("" + local.getX())));
+#//							eval.get(Evaluate.arguments).append(new Arg("top", false, new RealLiteral("" + local.getY())));
+#
+#							newItems.append(eval);
+#
+#						}
+#						
+#						// Get the instance that was automatically created
+#						View newView = vp.viewUnderCursor.get(children).firstItemOfType((Type)pick.getType());
+#						System.err.println("" + newView + " was created");
+#						
+#						// Remove the view being dragged from wherever its at.
+#						pick.remove();
+#	
+#						// Nullify the tile under the cursor
+#						vp.viewUnderCursor = null;
+#	
+#						return true;
+#	
+#					} else return false;
+#					
+#				}}
+#			),
+
+#			new Behavior(App.keyboard.BACKSPACE.pressed, new Action() { public boolean evaluate(View t) {
+#					
+#//					// Delete the current selection by removing it from the instance and the
+#//					// default.
+#//					View selection = ((ViewTypeEditor)t.getFirstElementOwnerOfType(Reflection.getJavaType(ViewTypeEditor.class))).getSelectionProperty().get();
+#//					Type viewType= ((ViewTypeEditor)t.getFirstElementOwnerOfType(Reflection.getJavaType(ViewTypeEditor.class))).getViewType();
+#//					
+#//					if(selection != null && selection.getType() != viewType) {
+#//
+#//						// Get the type of the instance to remove.
+#//						Type typeToRemove = (Type)selection.getType();
+#//						
+#//						// Remove the instance.
+#//						selection.remove(App.getStyle().getQuickerTransition());
+#//
+#//						// Remove the type from the type list.
+#//						viewType.getProperty(Type.types).remove(typeToRemove, null);
+#//
+#//						// Find the Make in the default children and remove it.					
+#//						System.err.println("Haven't removed from make yet.");
+#//					
+#//					}
+#
+#					return true;
+#				}})));
+
+	.
+
+.
+
+
+a Subtyper is a View that 
+
+	has Bool clipsChildren = false
+	refs View label = (a Label text=typeToSubtype.name font=(this getStyle).italicFont)
+	refs Type typeToSubtype = ?
+	refs View enclosingInstance = ?
+	
+	has Real width <- (this firstChildsRight)
+	has Real height <- (this firstChildsBottom)
+	
+	has Real hPad = 5.0
+	has Real vPad = 5.0
+	
+	has List<View> children = [ label ]
+
+	has List<Paint> background = [
+		(a FilledRectanglePaint primaryColor=(a Color r=0.0 g=0.0 b=0.0) alpha=0.1 cornerWidth=5.0 cornerHeight=5.0)
+	]
+	
+	has List<Behavior> behaviors = [
+		# If the drop fails, then disable it, and reuse it later.
+		(a Behavior event=(a MousePointer.DropFailed) action=true)
+#			App.mouse.pointer.getViewPicked().set(enabled, new Bool(false));
+#			App.mouse.pointer.getViewPicked().set(transparency, new Real(0.0), App.getGlobalStyle().getQuickTransition());
+#			return true;
+
+		(a Behavior event=(a MouseButton.Pressed) action=true)
+#			View instance = t.get(enclosingInstance);
+#			
+#			Type superType = t.get(typeToSubtype);
+#
+#			Type subType = ((BaseType)superType).createSubType(new Text(superType.getName() + t.get(enclosingInstance).getType().get(BaseType.types).length()));
+#			t.get(enclosingInstance).getType().get(BaseType.types).append(subType);
+#
+#			// What parameters does the type require?
+#			ArgumentList args = new ArgumentList();
+#			args.enclosingEnvironment = instance;
+#			if(subType.isTypeOf(Reflection.getJavaType(ElementView.class)).value) {
+#
+#				Type modelType = subType.getDeclarationOf(new Text("model")).getTypeExpression().getBaseType();
+#				System.err.println("" + subType + " is an element view, its model is of type " + modelType);
+#				
+#				Element<?> instanceModel = instance.get(ElementView.model);
+#				
+#				DecInterface suitableDec = null;
+#				for(DecInterface dec : instanceModel.getType().getDeclarationsToInstantiate()) {
+#					
+#					System.err.println("Is " + dec + " suitable?");
+#					if(dec.getTypeExpression().getBaseType().isTypeOf(modelType).value) {
+#						suitableDec = dec;
+#						break;
+#					}					
+#					
+#				}
+#				if(suitableDec == null) 
+#					throw new ElementError("I couldn't find a suitable property for " + subType + "'s model", null);
+#				
+#				args.add("property", false, instance.get(ElementView.model).getProperty(suitableDec.getName()));
+#
+#			}
+#			View newView = (View)subType.instantiate(args);
+#
+#			// Add a draggable to the view.
+#			newView.get(behaviors).append(new Draggable());
+#
+#			t.getWindow().addChild(newView);
+#			newView.set(left, new Real(App.mouse.pointer.getPosition().getX()));
+#			newView.set(top, new Real(App.mouse.pointer.getPosition().getY()));
+#
+#			// Set the transparency of the tile to .5 and pick it up.
+#			App.mouse.pointer.pickAndHoist.evaluate(newView);
+#			newView.set(transparency, new Real(1.0), App.getGlobalStyle().getQuickTransition());
+#
+#			return false;
+
+	]
+
+.

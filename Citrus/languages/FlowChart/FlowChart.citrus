@@ -1,0 +1,354 @@
+language FlowChart
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "Widgets"
+
+init
+(do ((a ChartEditor) show))
+
+a FlowChartElement is an View that
+
+	has Text label = ""
+	refs Chart chart = ?
+	has Bool clipsChildren = false
+
+	has static List<Paint> fieldBackground = [
+		(a FilledRectanglePaint 
+			primaryColor=(a Color r=255.0 g=255.0 b=255.0) 
+			cornerWidth=10.0 
+			cornerHeight=10.0
+		)
+		(a RectanglePaint 
+			primaryColor=(a Color r=0.0 g=0.0 b=0.0) 
+			cornerWidth=10.0 
+			cornerHeight=10.0
+		)
+	]
+	
+	when event (@width ValueChanged)
+		((children first).textLayout updateRightEdge (width minus 20.0))
+	
+	has List<View> children = [ 
+		(a TextField
+			property=@label 
+			fitToWidth=true
+			background=FlowChartElement.fieldBackground
+			left<-'(((this parentsWidth) minus width) divide 2.0)
+			top<-'(((this parentsHeight) minus height) divide 2.0)
+			width<-'((textLayout.rightExtent min (this parentsWidth)) max 20.0)
+		)
+	]
+
+.
+
+a Node is an FlowChartElement that
+
+.
+
+a DecisionNode is a Node that
+
+	has Real width = 0.0
+	has Real height = 0.0	
+	has List<Paint> background = chart.diamond
+
+.
+
+an ActionNode is a Node that
+
+	has Real width = 0.0
+	has Real height = 0.0
+	has List<Paint> background = chart.square
+
+.
+
+
+an Arrow is an FlowChartElement that
+
+	has List<Paint> background = chart.arrow
+
+	refs Node from = nothing
+	refs Node to = nothing
+	
+	has Real left <- (if (from isNothing) left (from.left plus (from.width divide 2.0)))
+	has Real top <- (if (from isNothing) top (from.top plus (from.height divide 2.0)))
+
+	has Real width <- (if (to isNothing) width ((to.left plus (to.width divide 2.0)) minus left))
+	has Real height <- (if (to isNothing) height ((to.top plus (to.height divide 2.0)) minus top))
+
+.
+
+a Chart is a View that
+
+	has Color decisionFillColor = (a Color r=255.0 g=180.0 b=0.0)
+	has Color decisionBorderColor = (a Color r=0.0 g=0.0 b=0.0)
+	has Color actionFillColor = (a Color r=255.0 g=0.0 b=0.0)
+	has Color actionBorderColor = (a Color r=0.0 g=0.0 b=0.0)
+	has Color arrowColor = (a Color r=0.0 g=0.0 b=0.0)
+	has Real arrowStroke = 3.0
+	has Real borderStroke = 3.0
+	has Real corner = 5.0
+	
+	has List<Paint> diamond = [
+		(a PolygonPaint 
+			primaryColor=decisionFillColor
+			points=[(a Point x=0.5 y=0.0) (a Point x=1.0 y=0.5) (a Point x=0.5 y=1.0) (a Point x=0.0 y=0.5)])
+		(a PolygonPaint 
+			fill=false
+			primaryColor=decisionBorderColor
+			stroke<-(fun [] borderStroke)
+			points=[(a Point x=0.5 y=0.0) (a Point x=1.0 y=0.5) (a Point x=0.5 y=1.0) (a Point x=0.0 y=0.5)])
+	]
+
+	has List<Paint> square = [
+		(a FilledRectanglePaint primaryColor=actionFillColor)	
+		(a RectanglePaint primaryColor=actionBorderColor stroke<-(fun [] borderStroke))	
+	]
+
+	has List<Paint> arrow = [ 
+		(a LinePaint primaryColor=arrowColor arrow=true stroke<-(fun [] arrowStroke))
+	]
+
+	refs Arrows arrows = (an Arrows)
+	refs Nodes nodes = (a Nodes)
+	refs SelectionHandles handles = (a SelectionHandles)
+
+	when event (handles Resized)
+		(if (handles.selection isa Arrow)
+			(do
+				refs Node nodeOver = nothing
+				(@nodeOver set 
+					(nodes.children itemThat
+						(fun [ refs Node node ]
+							(node containsLocalPoint event.point))))
+				((if (event.handle.xAction lessThan 0) 
+					handles.selection.@from handles.selection.@to)
+					 	set nodeOver)
+			)
+		)
+
+	has Real width <- 
+		((this parentsWidth) max ((arrows rightmostChildsRight) max (nodes rightmostChildsRight)))
+	has Real height <- 
+		((this parentsHeight) max ((arrows bottommostChildsBottom) max (nodes bottommostChildsBottom)))
+
+	has List<View> children = [ nodes arrows handles ]
+
+	a Nodes is a View that
+
+		has Real width <- (this parentsWidth)
+		has Real height <- (this parentsHeight)
+		
+	
+	.
+	
+	an Arrows is a View that
+	
+		has Real width <- (this parentsWidth)
+		has Real height <- (this parentsHeight)
+	
+	.
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a MouseButton.Pressed) action=(fun [ refs View view refs Event event ]
+			(do
+				refs FlowChartElement elementSelected = (nodes getChildThatContains event.point)
+				(if (elementSelected is nothing) 
+					(@elementSelected set (arrows getChildThatContains event.point)))
+				(if (elementSelected is nothing)
+					(do
+						refs Point localPoint = (this globalToLocal event.point)
+						# Insert an item of the selected type.
+						refs FlowChartElement newElement = 
+							(a (this getTypeToCreate) chart=this)
+						(if (newElement isa Arrow)
+							(arrows.children append newElement)
+							(nodes.children append newElement)
+						)
+						(newElement.@left set localPoint.x)
+						(newElement.@top set localPoint.y)
+						(handles.@selection set newElement)
+						(if (newElement isa Arrow) (handles showLineHandles) (handles showAllHandles))
+						((newElement.children first) requestKeyboardFocus "")
+						((handles.children last) reactTo event)
+					)
+					(do
+						(handles.@selection set elementSelected)
+						(if (elementSelected isa Arrow) (handles showLineHandles) (handles showAllHandles))
+						((handles.selection.children first) requestKeyboardFocus "")
+						(handles reactTo event)
+					)
+				)
+				true
+			))
+		)
+		(a Behavior event=(a MousePointer.Moved) action=(fun [ refs View view refs Event event ]
+			(do
+				true
+			))
+		)
+	]
+
+	fun Type getTypeToCreate [] ((this ownerOfType ChartEditor).typeSelector.selection getType)
+
+	fun Nothing layoutInRows []
+		(do
+			refs Real spacing = 20.0
+			refs Real topPosition = spacing
+			refs Real leftPosition = spacing
+			refs Real maxHeight = 0.0
+			refs Real rightEdge = (this parentsWidth)
+			(nodes.children foreach (fun [ refs FlowChartElement child ]
+				(do
+					(if ((child paddedHeight) greaterThan maxHeight)
+						(@maxHeight set (child paddedHeight)))
+					(if ((leftPosition plus (child paddedWidth)) greaterThan rightEdge)
+						(do
+							(@leftPosition set spacing)
+							(@topPosition set ((topPosition plus maxHeight) plus spacing))
+							(@maxHeight set 0.0)
+						))
+					(child.@left set leftPosition (a Uniform duration=200.0))
+					(child.@top set topPosition (a Uniform duration=200.0))
+					(@leftPosition set ((leftPosition plus (child paddedWidth)) plus spacing))					
+				)
+			))
+		)
+
+.
+
+a ChartEditor is an App that
+
+	has Real width = 600.0
+	has Real height = 400.0
+
+	refs Chart chart = (a Chart)
+
+	refs View typeSelector = 
+		(a Selector children=[
+			(an Arrow enabled=false chart=chart width=50.0 height=50.0 left<-(fun [] (this parentsLayoutsLeft)) top<-(fun [] (this parentsLayoutsTop)))
+			(an ActionNode enabled=false width=50.0 height=50.0 chart=chart) 
+			(a DecisionNode enabled=false width=50.0 height=50.0 chart=chart)
+		]
+	)
+
+	has static List<Paint> back = [ (a FilledRectanglePaint primaryColor=(a Color r=255.0 g=220.0 b=0.0)) ]
+
+	has List<View> children = [ 	
+		(a PaletteList
+			children=[
+				(a Palette name="Colors" contents=(a ColorPalette))
+				(a Palette name="Strokes" contents=(a StrokePalette))		
+				(a Palette name="Layout" contents=(a LayoutPalette))
+			]
+			background = ChartEditor.back
+		) 
+		(a Editor) 
+	]
+
+	a ColorPalette is a ListPalette that
+
+		has List<View> children = [
+			(a Label text="Box color")
+			(a LabeledView 
+				children=[ (a Label text="R") (a Slider vertical=false length=100.0 property=chart.actionFillColor.@r min=0.0 max=255.0) ])
+			(a LabeledView 
+				children=[ (a Label text="G") (a Slider vertical=false length=100.0 property=chart.actionFillColor.@g min=0.0 max=255.0) ])
+			(a LabeledView 
+				children=[ (a Label text="B") (a Slider vertical=false length=100.0 property=chart.actionFillColor.@b min=0.0 max=255.0) ])
+			(a Label text="Diamond color")
+			(a LabeledView 
+				children=[ (a Label text="R") (a Slider vertical=false length=100.0 property=chart.decisionFillColor.@r min=0.0 max=255.0) ])
+			(a LabeledView 
+				children=[ (a Label text="G") (a Slider vertical=false length=100.0 property=chart.decisionFillColor.@g min=0.0 max=255.0) ])
+			(a LabeledView 
+				children=[ (a Label text="B") (a Slider vertical=false length=100.0 property=chart.decisionFillColor.@b min=0.0 max=255.0) ])
+		]	
+	
+	.
+	
+	a LabeledView is a View that
+	
+		has Layout layout = (a HorizontalLayout spacing=5.0)
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)	
+	
+	.
+	
+	a StrokePalette is a ListPalette that
+
+		has List<View> children = [
+			(a Label text="Arrow stroke width")
+			(a Slider vertical=false length=100.0 property=chart.@arrowStroke min=1.0 max=15.0)
+			(a Label text="Border stroke width")
+			(a Slider vertical=false length=100.0 property=chart.@borderStroke min=1.0 max=15.0)
+		]
+	
+	.
+
+	a LayoutPalette is a ListPalette that
+	
+		has List<View> children = [
+			(a Button label=(a Label text="Layout in rows") action=(fun [] (chart layoutInRows)))
+		]
+	.
+
+	a Editor is a View that
+	
+		has Real left <- (this previousSiblingsRight)
+		has Real width <- ((this parentsWidth) minus left)
+		has Real height <- (this parentsHeight)
+	
+		has List<View> children = [ (a Canvas) (a Controls) ]
+		
+	.
+
+	a Controls is a View that
+
+		has Real top <- ((this parentsHeight) minus height)
+		has Real width <- (this parentsWidth)
+		has Real height <- (this tallestChildsHeight)
+		has Real vPad = 5.0
+		has Real hPad = 5.0
+		has Layout layout = (a HorizontalLayout spacing = 5.0)
+		has List<Paint> background = ChartEditor.back
+		has List<View> children = [ 
+			typeSelector
+			(a Slider property=chart.@scale min=0.05 max=2.0)
+			(a Button label=(a Label text="Delete\nselection") action=
+				(fun [] (if (chart.handles.selection isSomething) 
+					(this removeSelection))))
+		]
+		
+	.
+
+	fun Nothing removeSelection []
+	(do
+		(chart.handles.selection remove)
+		(chart.handles.@selection set nothing)
+	)
+			
+
+	a Canvas is a View that
+	
+		has Real width <- (this parentsWidth)
+		has Real height <- (this parentsRemainingHeight)
+
+		has List<Paint> background = [ (a GridPaint step=50.0 alpha=0.25) ]
+		has List<View> children = [ (a ScrollView viewToScroll=chart) ] 
+
+	.
+
+.
+
+a ListPalette is an abstract View that
+
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this lastChildsBottom)
+	has Layout layout = (a VerticalLayout alignment="left-aligned" spacing=5.0)
+
+.

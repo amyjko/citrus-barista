@@ -1,0 +1,46 @@
+language ListenerTests
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.paints"
+
+init
+(do
+	((a ListenerTestsApp) show)	
+)
+
+
+a ListenerTestsApp is an App that
+
+	has Bool flag = false
+	has List<View> children = [ (a Checkbox property=@flag) (a TestView)]
+	has Real width = 200.0
+	has Real height = 200.0 
+
+	has Text text = "blah" for which (text matches "c[a-z]+")
+
+	when event (@flag ValueChanged)
+		(debug "Flag changed to " flag " and text is \"" text "\"")
+
+	when event (@text ValidityChanged)
+		(debug "Text was invalid; wasn't set")
+
+	a TestView is a View that
+	
+		has Real hPad = 40.0
+		has Real vPad = 40.0
+		has Real width <- (this parentsWidth)
+			for which (width lessThan 400.0) otherwise 400.0
+		has Real height <- (this parentsHeight)
+			for which (width lessThan 400.0) otherwise 400.0
+
+		has List<Paint> content = [
+			(a FilledRectanglePaint primaryColor=(a Color r=255.0 g=0.0 b=0.0))
+		]
+		
+	.
+	
+
+.

@@ -1,0 +1,52 @@
+language Collaps
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "Widgets"
+
+init
+(do ((a PaletteTest) show))
+
+a PaletteTest is an App that
+
+	has Real width = 400.0
+	has Real height = 400.0
+
+	has List<View> children = [ 	
+		(a Palette 
+			name="Palette" 
+			contents=(a Options)
+			left=100.0
+			top=100.0
+			width=100.0
+			background=[
+				(a FilledRectanglePaint 
+					primaryColor=(a Color r=200.0 g=100.0 b=0.0) 
+					secondaryColor=(a Color r=200.0 g=200.0 b=50.0))
+			]
+		)
+	]
+
+	an Options is a View that
+
+		has Real left = 10.0
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this lastChildsBottom)
+		has Layout layout = (a VerticalLayout alignment="left-aligned" spacing=5.0)
+
+		has List<View> children = [
+			(a Label text="Red")
+			(a Label text="Green")
+			(a Label text="Blue")
+			(a Label text="Cyan")
+			(a Label text="Magenta")
+			(a Label text="Yellow")
+		]	
+	
+	.
+	
+.

@@ -1,0 +1,523 @@
+language Barista
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+
+an IndentedListView is a abstract ListView that
+
+	has Layout layout = (a VerticalLayout indentation=30.0 spacing=2.0)
+	has Real width <- (if (model isEmpty) 50.0 (this rightmostChildsRight))
+	has Real height <- (if (model isEmpty) 50.0 (this lastChildsBottom))
+	has Bool clipsChildren = false
+.
+
+a BaselinedListView is a abstract ListView that
+
+	has Layout layout = (this getStyle).spaceWidthSpaced
+	has Real width <- (if (model isEmpty) 50.0 (this rightmostChildsRight))
+	has Real height <- (if (model isEmpty) 50.0 (this lastChildsBottom))
+	has Bool clipsChildren = false
+
+	has Real maxChildAscent <- 
+		(let [ refs View max ]
+			(do
+				(@max set 
+					(children choose
+						(fun [ refs View topChoice refs View candidate ]
+							(cond
+								candidate.hidden false
+								(topChoice is nothing) true
+								((candidate getMaxChildAscent) greaterThan (topChoice getMaxChildAscent)) true
+								true false
+							)
+						)
+					)
+				)
+				(if (max is nothing) 0.0 (max getMaxChildAscent))
+			)
+		)
+		
+	fun Real getMaxChildAscent [] maxChildAscent
+	has Real maxAscent <- (if (((parent is nothing) not) and (parent hasa "maxAscent")) parent.maxAscent maxChildAscent)
+
+.
+
+a BaselinedHeader is a abstract View that
+
+	has Layout layout = (a HorizontalLayout alignment="top-aligned")
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Bool clipsChildren = false
+
+	has Real maxChildAscent <- 
+		(let [ refs View max ]
+			(do
+				(@max set 
+					(children choose
+						(fun [ refs View topChoice refs View candidate ]
+							(cond
+								candidate.hidden false
+								(topChoice is nothing) true
+								((candidate getMaxChildAscent) greaterThan (topChoice getMaxChildAscent)) true
+								true false
+							)
+						)
+					)
+				)
+				(if (max is nothing) 0.0 (max getMaxChildAscent))
+			)
+		)
+	
+	fun Real getMaxChildAscent [] maxChildAscent
+
+	has Real maxAscent <- (if (((parent is nothing) not) and (parent hasa "maxAscent")) parent.maxAscent maxChildAscent)
+
+	has List<Behavior> behaviors = [(a Navigable)]
+
+.
+
+a BaselinedElementView is an abstract ElementView that
+
+	has Layout layout = (this getStyle).spaceWidthSpaced
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Bool clipsChildren = false
+	has List<Behavior> behaviors = [(a Navigable)]
+	
+	has Real maxChildAscent <- 
+		(let [ refs View max ]
+			(do
+				(@max set 
+					(children choose
+						(fun [ refs View topChoice refs View candidate ]
+							(cond
+								candidate.hidden false
+								(topChoice is nothing) true
+								((candidate getMaxChildAscent) greaterThan (topChoice getMaxChildAscent)) true
+								true false
+							)
+						)
+					)
+				)
+				(if (max is nothing) 0.0 (max getMaxChildAscent))
+			)
+		)
+	
+	fun Real getMaxChildAscent [] maxChildAscent
+	
+	has Real maxAscent <- (if (((parent is nothing) not) and (parent hasa "maxAscent")) parent.maxAscent maxChildAscent)
+
+.
+
+
+# Must be in a baselined view
+a TokenView is an abstract ElementView that
+
+	has static Layout horizontal = (a HorizontalLayout alignment="top-aligned")
+	
+	has Layout layout = TokenView.horizontal
+	has Real width <- ((children first).right max (children second).right)
+	has Real height <- ((children first).bottom max (children second).bottom)
+
+	# This is the central constraint for placing tokens at the baseline. But it requires
+	# that the parent has a max ascent to work.
+	has Real top <- 
+		(if (((parent is nothing) not) and (parent hasa "maxAscent")) 
+			(parent.maxAscent minus font.ascent)
+			(this parentsLayoutsTop)
+		)
+	has Bool focusable = false
+	has Bool clipsChildren = false
+	has Real hPad = 0.0
+
+	has FontFace font = (this getStyle).plainFont
+	fun Real getMaxChildAscent [] font.ascent
+
+	has List<Behavior> behaviors = TokenView.sharedBehaviors
+
+	has static List<Behavior> sharedBehaviors = [
+		(a Behavior event=(a Keyboard.Pressed key="F3") action=
+			'(do
+				(debug "Structure context is  " (model structureLeftOf) " " model " " (model structureRightOf))
+				(debug "Token context is  " (model tokenLeftOf) " " model " " (model tokenRightOf))
+				true
+			)
+		)
+		(a Behavior event=(a Keyboard.Pressed key="F5") action=
+			'(do
+				(debug "Last token of previous line is " (model lastTokenOfPreviousLine))
+				(debug "First token of next line is " (model firstTokenOfNextLine))
+				true
+			)
+		)
+		(a Behavior event=(a Keyboard.Pressed key="F4") action=
+			'(do
+				(debug "Max ascent of " parent " is " parent.maxAscent " and font ascent of " this " is " font.ascent)
+				(debug "\tTherefore, top of " this " is " top " and the top of the parent is " parent.top)
+				(debug "\t\tTop of parents parent " parent.parent " is " parent.parent.top)
+				true
+			)
+		)
+		(a Navigable)
+	]
+
+.
+
+a AutoCompleteMenu is a SetView that
+
+	has Set model = ?
+
+	# The current selection, which starts as the first view
+	has View selection = (children first)
+	
+	has Function includeFunction = (fun [ refs Element item ] true)
+
+	has Bool focusable = true
+
+	has Layout layout = (a VerticalLayout spacing=0.0)
+	
+	has Paint selectionPaint = (a SelectionPaint)
+
+	a SelectionPaint is a FilledRectanglePaint that
+
+		has Color primaryColor = (enclosing getStyle).highlightColor
+		has Real alpha <- (if (selection is nothing) 0.0 1.0) 
+		has Real	top <- (if (selection is nothing) 0.0 selection.top) 
+		has Real bottom <- (if (selection is nothing) 0.0 (height minus selection.bottom))
+	
+	.
+	
+	has Real left = 0.0
+	has Real top = 0.0
+	has Real width <- (if (model isEmpty) 25.0 ((this greatestSumOfChildrensWidths) plus 50.0))
+	has Real height <- (if (model isEmpty) 25.0 (this lastChildsBottom))
+	has Real hPad = 5.0
+	has Real vPad = 0.0
+	has Bool hidden = true
+
+	has List<Paint> background = [	
+		(this getStyle).menuPaint
+		selectionPaint
+	]
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a MousePointer.Entered)
+			action='(do (this chooseSelection) true))
+		(a Behavior event=(a MousePointer.Moved)
+			action='(do (this chooseSelection) true))
+		(a Behavior event=(a MousePointer.Exited)
+			action='(do (@selection set nothing) true))
+		(a Behavior event=(a MouseButton.Released)
+			action=
+			'(do
+				("menu was clicked" print)			
+			)
+		)
+	]
+	
+	# We only include the item if its name
+	fun Bool include [has Element item] (eval includeFunction item)
+
+	fun Bool moveSelectionUp []
+	(do
+		(background remove selectionPaint)
+		(background append selectionPaint)
+		(if (selection is nothing)
+			(@selection set (children first))
+			(if (((selection getPreviousSibling) is nothing) not)
+				(@selection set (selection getPreviousSibling))
+				true))
+	)
+
+	fun Bool moveSelectionDown []
+		(if (selection is nothing)
+			(@selection set (children first))
+			(if (((selection getNextSibling) is nothing) not)
+				(@selection set (selection getNextSibling))
+				true))
+
+	fun Nothing chooseSelection [] 
+	(do 
+		# Which view is the mouse over?
+		#View newSelection = null;
+		#View oldSelection = get(selection);
+		#double mouseY = globalToContent(App.mouse.pointer.getPosition()).getY();
+		#for(View v : get(children))
+		#if(v.real(top) <= mouseY) newSelection = v;
+		#setSelection(newSelection);		
+	)
+
+.
+
+a SelectableView is an ElementView that
+
+	has List<ElementView> selection = []
+	has List<Element> clipboard = nothing
+
+	has Bool focusable = true
+	has View start = nothing
+	has View end = nothing
+	has Paint selectionPaint = (this getStyle).selectionPaint
+	has Bool selectionInitiated = false
+	refs View viewUnderFirstMove = nothing
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a MousePointer.Moved) action=
+			'(if (this mouse).left.down
+				(let  [ refs View viewCurrentlyUnder =
+							(this focusableVisibleViewClosestTo (this mouse).cursor.left (this mouse).cursor.top)
+						]
+					(do
+						(cond
+							(viewUnderFirstMove is nothing)
+								(@viewUnderFirstMove set viewCurrentlyUnder)
+							(viewCurrentlyUnder is viewUnderFirstMove)
+								false
+							true
+								(this beginSelection viewUnderFirstMove viewCurrentlyUnder)
+						)
+						true
+					)
+				)
+				false
+			)
+		)
+		(a Behavior event=(a MousePointer.Dragged) action=
+			'(if (this mouse).left.down
+				(do
+					(this updateSelection 
+						start
+						(this focusableVisibleViewClosestTo 
+							(this mouse).cursor.left 
+							(this mouse).cursor.top
+						)
+					)
+					true
+				)
+				false
+			)
+		)
+		(a Behavior event=(a MouseButton.Released) action=
+			'(do 
+				(@viewUnderFirstMove set nothing)
+				(if (selectionInitiated not)
+					(this updateSelection nothing nothing)				
+					(this endSelection nothing)
+				)
+				true
+			)
+		)
+		(a Behavior event=(a Keyboard.Typed character=`\b`) action=
+			'(do
+				(selection foreach
+					(fun [ refs ElementView view ]
+						(view emancipate)
+					)
+				)
+				true
+			)
+		)
+		(a Behavior event=(a Keyboard.Released shift=false) action=
+			'(do
+				(this endSelection end)
+				(this updateSelection nothing nothing)
+				true
+			)
+		)
+		(a Behavior event=(a Keyboard.Pressed key="right" shift=true) action=
+			'(do
+				(if (start is nothing)
+					(this beginSelection (this getWindow).focus (this getWindow).focus)
+					(do
+						(if ((end nextFocusableView) is nothing) 
+							false
+							(this updateSelection start (end nextFocusableView))
+						)
+						true
+					)
+				)
+				true
+			)
+		)
+		(a Behavior event=(a Keyboard.Pressed key="left" shift=true) action=
+			'(do
+				(if (start is nothing)
+					(this beginSelection (this getWindow).focus (this getWindow).focus)					
+					(do
+						(if ((end previousFocusableView) is nothing) 
+							false
+							(this updateSelection start (end previousFocusableView))
+						)
+						true
+					)
+				)
+				true
+			)
+		)
+		(a Behavior event=(this getStyle).copyEvent action=
+			'(do 
+				(@clipboard set [])
+				(selection foreach 
+					(fun [refs ElementView item]
+						(clipboard append item.model)
+					)
+				)
+			)
+		)
+	]
+	
+	fun Bool beginSelection [ refs View start refs View end ]
+		(do
+			((this mouse).cursor pick this)
+			(this updateSelection start end)
+			(@selectionInitiated set true)
+			(this requestKeyboardFocus "next")
+			true
+		)
+	
+	fun Bool updateSelection [refs View newStart refs View newEnd ]
+		(do
+			# Remove the selection paint from all of the views in the selection
+			(selection foreach (fun [refs ElementView item] 
+				(item.background remove selectionPaint)))
+
+			# Define a new selection
+			(@start set newStart)
+			(@end set newEnd)
+			(@selection set
+				(if ((start is nothing) or (end is nothing)) 
+					[]
+					(start shortestPathTo end)
+				)
+			)
+			
+			# Add it to all of the views in the new selection
+			(selection foreach (fun [refs Element item] 
+				(item.background append selectionPaint)))
+				
+		)
+		
+	fun Bool endSelection [ refs View newKeyboardFocus ]
+		(do
+			((this mouse).cursor release)
+			(if ((newKeyboardFocus is nothing) not) (newKeyboardFocus requestKeyboardFocus "next"))
+			(@selectionInitiated set false)
+		)
+	
+.
+
+
+an AutoCompleteActionView is an View that
+
+	refs AutoCompleteAction model = ?
+	
+	has List<View> children = [ (model.@expansionToInsert toView) ]
+	
+	has Real width <- (this firstChildsRight)
+	has Real height <- (this firstChildsBottom)
+	
+.
+
+# Used in auto-complete menus
+a NonTerminalView is an ReferenceView that
+
+	has NonTerminal model = ?
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Layout layout = (this getStyle).spaceWidthSpaced
+
+	has List<View> children = [
+		((a model.type) toView)
+	]
+.
+
+a SequenceView is an ReferenceView that
+
+	has Sequence model = ?
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Layout layout = (this getStyle).spaceWidthSpaced
+
+	has List<View> children = [
+		(a Label text=(model.expansions toText))
+	]
+.
+
+
+an AutoCompleteActionMenu is a View that
+
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this lastChildsBottom)
+	has Layout layout = (a VerticalLayout spacing=3.0)
+
+	# The current selection, which starts as the first view
+	has View selection = (children first)
+	
+	has Bool focusable = true
+	
+	has Paint selectionPaint = (a SelectionPaint)
+
+	a SelectionPaint is a FilledRectanglePaint that
+
+		has Color primaryColor = (enclosing getStyle).highlightColor
+		has Real alpha <- (if (selection is nothing) 0.0 1.0) 
+		has Real	top <- (if (selection is nothing) 0.0 (enclosing.vPad plus selection.top))
+		has Real bottom <- (if (selection is nothing) 0.0 (enclosing.vPad plus (height minus selection.bottom)))
+	
+	.
+	
+	has Real left = 0.0
+	has Real top = 0.0
+	has Real hPad = 5.0
+	has Real vPad = 5.0
+	has Bool hidden = true
+
+	has List<Paint> background = [	
+		(this getStyle).menuPaint
+		selectionPaint
+	]
+
+	has List<Behavior> behaviors = [
+#		(a Behavior event=(a MousePointer.Entered)
+#			action='(do (this chooseSelection) true))
+#		(a Behavior event=(a MousePointer.Moved)
+#			action='(do (this chooseSelection) true))
+#		(a Behavior event=(a MousePointer.Exited)
+#			action='(do (@selection set nothing) true))
+#		(a Behavior event=(a MouseButton.Released)
+#			action=
+#			'(do
+#				("menu was clicked" print)			
+#			)
+#		)
+	]
+	
+	# We only include the item if its name
+	fun Bool include [has Element item] (eval includeFunction item)
+
+	fun Bool moveSelectionUp []
+	(do
+		(background remove selectionPaint)
+		(background append selectionPaint)
+		(if (selection is nothing)
+			(@selection set (children first))
+			(if (((selection getPreviousSibling) is nothing) not)
+				(@selection set (selection getPreviousSibling))
+				true))
+	)
+
+	fun Bool moveSelectionDown []
+		(if (selection is nothing)
+			(@selection set (children first))
+			(if (((selection getNextSibling) is nothing) not)
+				(@selection set (selection getNextSibling))
+				true))
+	
+.
+

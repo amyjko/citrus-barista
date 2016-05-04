@@ -1,0 +1,158 @@
+language CitrusEditor
+
+a Language is an Element that
+
+	has Name name = (a Name)
+	has Set<Unit> units = {}
+
+.
+
+
+a Unit is an Element that
+
+	has Text name = ""
+	has ClassOrLanguageName languageName = (a ClassOrLanguageName)
+	has List<Text> languagesUsed = []
+	has List<Class> classes = []
+	has Expression start = nothing
+
+.
+
+# Argument ::= identifier [ (=|<-) ] Expression
+an Argument is an Element that
+
+	has Text name = ""
+	has Bool constraint = false
+	has Expression value = (a Name)
+
+.
+
+# TypeExpression ::= Name { TypeExpression }
+a TypeExpression is an Element that
+
+	has Name class = (a Name)
+	has List<TypeExpression> arguments = []
+	
+.
+
+# Restiction ::= for which Expression otherwise Expression
+a Restiction is an Element that
+
+	has Expression condition
+	has Expression correction
+	
+.
+
+# ClassDeclaration ::= ( Class | PropertyDeclaration | Fun | When )
+a ClassDeclaration is an abstract Element that.
+
+# Class ::= ( a|an ) Name is ( a|an ) [ abstract ] TypeExpression that
+#					{ ClassDeclaration }
+#				.
+a Class is a ClassDeclaration that
+
+	has Name name = (a Name)
+	has TypeExpression prototype = (a TypeExpression)
+	has List<ClassDeclaration> declarations = []
+	has Bool concrete = true
+
+.
+
+a PropertyDeclaration is a ClassDeclaration that
+
+	has Name name = (a Name)
+	has TypeExpression type = (a TypeExpression)
+	has Expression value = nothing
+	has Bool isConstraint = false
+	has Bool isReference = false
+	has List<Restiction> restrictions = []
+	
+.
+
+a Rule is a PropertyDeclaration that
+
+	has TypeExpression type = (a TypeExpression name="Bool")
+
+.
+
+# Fun ::= fun TypeExpression [ { Expression } ] Expression
+a Fun is a ClassDeclaration that
+
+	has Name name = (a Name)
+	has Bool isStatic = false
+	has TypeExpression returnType = (a TypeExpression)
+	has List<PropertyDeclaration> parameters = []
+	has Expression body
+
+.
+
+# When ::= when Name ( Expression ClassOrLanguageName { Argument } ) Expression
+a When is a ClassDeclaration that
+
+	has Name name = (a Name)
+	has Expression subject
+	has ClassOrLanguageName event = (a ClassOrLanguageName)
+	has List<Argument> arguments = []	
+
+.
+
+an Expression is an abstract Element that.
+
+# Actually represents any language, class, function, or property name,
+# or a Boolean, integer, real or text literal.
+a Name is an Expression that
+
+	has Text token = ""
+	
+.
+
+a Do is an Expression that
+
+	has List<Expression> expressions = []
+
+.
+
+# Evaluate ::= ( Expression Expression { Expression } )
+an Evaluate is an Expression that
+
+	has Expression context
+	has Expression function
+	has List<Argument> arguments = []
+
+.
+
+# NewList ::= [ { Expression } ]
+a NewList is an Expression that
+
+	has List<Expression> items
+	
+.
+
+# NewSet ::= { { Expression } }
+a NewSet is an Expression that
+
+	has List<Expression> items
+
+.
+
+# Possessive ::= Expression . Expression
+a Possessive is an Expression that
+
+	has Expression possessor
+	has Expression possession
+
+.
+
+# PropertyReference ::= @ Name
+a PropertyReference is an Expression that
+
+	has Name property = (a Name)
+	
+.
+
+# Quote ::= ' Expression
+a Quote is an Expression that
+
+	has Expression expression
+	
+.

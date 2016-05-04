@@ -1,0 +1,32 @@
+language RegExpDemo
+
+# We import citrus since we're making views
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+init
+(do
+	((a RegExpDemo) show)
+)
+
+a RegExpDemo is an App that
+
+	has Real width = 200.0
+	has Real height = 200.0
+	
+	has Layout layout = (a VerticalLayout)
+	has Text blah = ""
+	has List<View> children = [ 
+		(a TextField 
+			property=@blah
+			left<-'(if (parent is nothing) 0.0 ((parent.width minus (this paddedWidth)) divide 2.0)) 
+			top<-'(if (parent is nothing) 0.0 ((parent.height minus (this paddedHeight)) divide 2.0)) 
+		) 
+	]
+
+.

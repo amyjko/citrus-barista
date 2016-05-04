@@ -1,0 +1,457 @@
+language Barista
+
+uses "Widgets"
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+# This is a file full of different types of field views. They may be
+# composed into full token views, representing a token and its whitespace
+# or they may be used individually to represent a token's text or whitespace alone.
+
+# The base class for all token text fields or whitespace fields. Encapsulates:
+# (1) Responding to an autocomplete event by showing an autocomplete menu
+# (2) Handling selection and selection movement events on the menu
+# (3) Hiding the menu when necessary.
+# (4) Navigating to the next field in the view when arrow keys are pressed
+# (5) Retokenizing and hiding the menu when focus is lost.
+a TokenPartField is an abstract TextField that
+
+	has List<Paint> background = []
+#	has static Paint debugRectangle = (a RectanglePaint primaryColor=(a Color r=255.0 g=0.0 b=0.0))
+#	has List<Paint> foreground = [ TokenPartField.debugRectangle ]
+	has List<View> children = []
+
+	has Bool clipsChildren = false
+	has Real hPad = 0.0
+	has Real vPad = 2.0
+
+	has Real width <- (textLayout.rightExtent max 5.0)
+	has Real height <- (textLayout.bottomExtent minus font.descent)
+
+	fun Bool isWhitespace [] false
+
+	refs AutoCompleteMenu menu = nothing
+
+	has List<Behavior> behaviors = (([		
+		(a Behavior event=(a Keyboard.Typed character=`\n`) action=
+			'(if (((menu is nothing) not) and menu.hoisted ((menu.selection is nothing) not))
+					(let [ refs AutoCompleteAction action = menu.selection.model ]
+						(do
+							(debug "Handling " (action toText))
+							(action.expansionToInsert execute [ action.context ])
+							(menu.@hidden set true)
+							(menu.@hoisted set false)
+						)
+					)
+				false
+			)
+		)
+		] appendList super) appendList [
+		(a Behavior event=(a Keyboard.Pressed key="escape")
+			action=
+			'(do
+				refs List<AutoCompleteOptions> options = ((property owner) generateAutocompleteOptions)
+				(debug "Here are the options:\n")
+
+				(if (menu is nothing) 
+					(do
+						(@menu set (an AutoCompleteActionMenu))
+						(options foreach 
+							(fun [ refs AutoCompleteOption option ] 
+								(do
+									(debug "\t" (option toText))
+									(menu.children append (an AutoCompleteActionView model=option))
+								)
+							)
+						)
+						(children append menu)
+					)
+				)
+				(if menu.hidden
+					(do
+						(menu.@hoisted set true)
+						(menu.@hidden set false)
+						(menu.@left set (this getCaretLeft))
+						(menu.@top set ((this getCaretBottom) minus 7.0))
+					)
+					(do
+						(menu.@hoisted set false)
+						(menu.@hidden set true)
+					)
+				)
+				true
+			)
+		)
+		(a Behavior event=(a Keyboard.Pressed key="up") action=
+			'(if (((menu is nothing) not) and menu.hoisted) 
+				(do
+					(menu moveSelectionUp) 
+					true
+				)
+				(let [ refs Element tokenOfPreviousLine = ((property owner) lastTokenOfPreviousLine) ]
+					(do
+						(if ((tokenOfPreviousLine is nothing) not)
+							((tokenOfPreviousLine.@whitespace firstView) requestKeyboardFocus "previous"))
+						true
+					)
+				)
+			)
+		)
+		(a Behavior event=(a Keyboard.Pressed key="down") action=
+			'(if (((menu is nothing) not) and menu.hoisted) 
+				(do 
+					(menu moveSelectionDown) 
+					true
+				)
+				(let [ refs Element tokenOfNextLine = ((property owner) firstTokenOfNextLine) ]
+					(do
+						(if ((tokenOfNextLine is nothing) not)
+							((tokenOfNextLine.@whitespace firstView) requestKeyboardFocus "next"))
+						true
+					)
+				)				
+			)
+		)
+		(a Behavior event=(a Keyboard.Pressed key="right") action='(this focusOnNextField))
+		(a Behavior event=(a Keyboard.Pressed key="left") action='(this focusOnPreviousField))
+		(a Behavior event=(a App.FocusLost)
+			action=
+			'(do
+				(if ((menu is nothing) not) 
+					(do 
+						(menu.@hoisted set false) 
+						(menu.@hidden set true)
+					)
+				)
+				false
+			)			
+		)
+		BaristaBehaviors.deleteCharacter
+		BaristaBehaviors.backspaceCharacter
+		BaristaBehaviors.typeCharacter
+	])
+
+	fun Bool focusOnPreviousField []
+		(if (this isWhitespace)
+			(do
+				(((property owner).@token firstView) requestKeyboardFocus "previous")
+				true
+			)
+			(do
+				refs Token previousToken = ((property owner) tokenLeftOf)
+				(debug "Previous token is " previousToken)
+				(if (previousToken is nothing)
+					(debug "Warning: there's no token left of " (property owner))	
+					(if (previousToken.@whitespace firstView).focusable
+						((previousToken.@whitespace firstView) requestKeyboardFocus "previous")
+						((previousToken.@token firstView) requestKeyboardFocus "previous")								
+					)
+				)
+				true
+			)
+		)
+
+	fun Bool focusOnNextField []
+		(if (((this isWhitespace) not) and ((property owner).@whitespace firstView).focusable)
+			(do
+				(((property owner).@whitespace firstView) requestKeyboardFocus "next")
+				true
+			)
+			(do
+				refs Token nextToken = ((property owner) tokenRightOf)
+				(if (nextToken is nothing)
+					(debug "Warning: there's no token right of " (property owner))
+					((nextToken.@token firstView) requestKeyboardFocus "next")
+				)
+				true
+			)
+		)
+	
+.
+
+# A token part that represents the token text. Menu contents include valid replacements
+# for this token.
+a TokenField is a TokenPartField that
+
+	has List<Behavior> behaviors = ([
+		(a Behavior event=(an App.FocusReceived) action=
+			'(do
+				(if ((background contains (this getStyle).focusPaint) not)
+					(background insert (this getStyle).focusPaint))
+				false
+			)
+		)				
+		(a Behavior event=(an App.FocusLost) action=
+			'(do
+				(background remove (this getStyle).focusPaint)
+				false
+			)
+		)
+	] appendList super)
+
+	# Items are only included if their name starts with the name stored in the reference
+	fun Nothing include [] 
+		(fun [has Element item] (item.name.token startsWith model.token))
+
+	fun Set<Structure> getMenuContents [] ((property owner) tokenCompletions)
+
+	fun Nothing handleSelection [ refs Element model ]
+		(do
+			(debug "Should be replacing " parent.model " with " tokenMenu.selection.model)
+		)
+	
+.
+
+# A token field that has a label representing the name by which this field's property is referred.
+a TokenFieldWithLabel is a TokenField that
+
+	has Real width <- (if ((text length) greaterThan 0) textLayout.rightExtent ((children first) paddedWidth))
+
+	has List<View> children = [
+		(a PropertyLabel 
+			font=font
+			text=
+				(if (((property owner) getPropertyOwner) is nothing)
+					"identifier"
+					(((property owner) getPropertyOwner) name)
+				)
+		)
+	]
+
+	has List<Behavior> behaviors = ([TokenFieldWithLabel.hideLabel TokenFieldWithLabel.showLabel] appendList super)
+	has static Behavior hideLabel = 
+		(a Behavior event=(an App.FocusReceived) action='(do ((children first).@hidden set true) false))
+	has static Behavior showLabel =
+		(a Behavior event=(an App.FocusLost) action='(do ((children first).@hidden set false) false))
+	
+	a PropertyLabel is a Label that
+	
+		has Real transparency <- (if ((enclosing.text length) greaterThan 0) 0.0 0.25)
+		
+	.
+
+.
+
+a PairedDelimiterField is a TokenField that
+
+	has List<Behavior> behaviors = ([
+		(a Behavior event=(an App.FocusReceived) action=
+			'(if ((property owner).owner isa Structure)
+				(do
+					(((property owner).owner.left.@token firstView).background append (this getStyle).selectionPaint)
+					(((property owner).owner.right.@token firstView).background append (this getStyle).selectionPaint)
+					true
+				)
+				false
+			)
+		)
+		(a Behavior event=(an App.FocusLost) action=
+			'(if ((property owner).owner isa Structure)
+				(do
+					(((property owner).owner.left.@token firstView).background remove (this getStyle).selectionPaint)
+					(((property owner).owner.right.@token firstView).background remove (this getStyle).selectionPaint)
+					true
+				)
+				false
+			)
+		)
+	] appendList super)
+
+.
+
+
+# The base class for all views of whitespace.
+a WhitespaceField is a TokenPartField that
+
+	has List<Paint> background = []
+	has List<View> children = []
+	has constant FontFace font = (this getStyle).whitespaceFont
+
+	fun Bool isWhitespace [] true
+
+	fun Bool include [] 
+		(fun [ has Element item ]
+			(cond
+				# We need the abstract ones, because they have the property name
+				(item isa NonTerminal) 
+					(do 
+						((((item ownerOfType Type) isErroneous) not) and item.type.concrete)
+					)
+				true false
+			)
+		)
+
+	has Bool clipsChildren = false
+	has Real hPad = 0.0
+	has Real vPad = 2.0
+	has Real width <- 
+		(if ((text length) greaterThanOrEqualTo 1) 
+			(textLayout.rightExtent max 5.0)
+			0.0
+		)
+	has Bool focusable <- ((text length) greaterThan 1)
+
+	# If the text is empty, the index is valid. Otherwise, it may not be 0 or (text length).
+	has Int caretIndex = 0
+		for which 
+			(if ((text length) lessThan 2)
+		 		true
+				((caretIndex greaterThan 0) and (caretIndex lessThan (text length)))
+			)
+		otherwise
+			(if (caretIndex isEquivalentTo 0) 
+				1 ((text length) minus 1))
+
+	# The menu contains all whitespace completions from the token.
+	fun Set<Structure> getMenuContents [] ((property owner) whitespaceCompletions)
+
+	# The menu selection is handled by...
+	fun Bool handleSelection [ refs Element nt ]
+		(let [ 
+			refs Structure modifiedToken = (property owner)
+			refs Structure ownerOfModifiedToken = modifiedToken.owner
+			refs Structure right = (modifiedToken tokenRightOf)
+			refs Structure newToken = (an nt.type)
+			refs List newTokensTokens = (newToken unparse nothing)
+			refs List affectedTokens = (if (right is nothing) [ modifiedToken ] [ modifiedToken right ])
+			refs Structure commonAncestor = (BaristaBehaviors commonAncestorOf affectedTokens)
+			refs List unparsedTokens = (BaristaBehaviors unparseAsNecessary affectedTokens commonAncestor)
+			refs Structure newStructure
+			refs Text whitespaceLeft = (text substring 0 caretIndex)
+			refs Text whitespaceRight = (text substring caretIndex (text length))
+		]
+			(do
+
+				(debug "Property after " ((property owner) getPropertyOwner) " is " ((property owner) getPropertyNameAfter))
+				
+				(debug "Inserting " newTokensTokens " between " modifiedToken " and " right " in " unparsedTokens)
+				(unparsedTokens appendListAt newTokensTokens (unparsedTokens indexOf modifiedToken))
+				(debug "\tParsing " unparsedTokens " with " (((commonAncestor getType) getAbstractGrammar) toText))
+				(@newStructure set
+					(a TokensToStructure 
+						tokens=(a TokenStream tokensToParse=unparsedTokens) 
+						autocomplete=false 
+						grammar=((commonAncestor getType) getAbstractGrammar)).structure)
+				(debug "\tNew structure is " newStructure)
+
+				(debug "Splitting whitespace...")
+				(@text set whitespaceLeft)
+				((newToken lastTokenIn).@whitespace set whitespaceRight)
+
+				# Hide before replacing
+				(menu.@hidden set true)
+				(menu.@hoisted set false)
+
+				(if ((newStructure is nothing) not)
+					(do
+						# Make sure all of the properties in the structure own their values if possible
+						(BaristaBehaviors claimOwnership newStructure)								
+						# Replace the old structure with the new structure, implicitly replacing the view
+						((commonAncestor getFirstView) replaceAndFocusOn newStructure "")
+						(((newToken lastTokenIn).@whitespace firstView) requestKeyboardFocus "previous")
+					)
+				)
+			)
+		)
+
+.
+
+a WhitespaceToTheRightField is a WhitespaceField that
+
+	has Real top <- (if (parent is nothing) 0.0 (this getPreviousSibling).top)
+	has Real left <- (if (parent is nothing) 0.0 (parent.children first).right)
+	has Real transparency = 0.0
+
+.
+
+a WhitespaceBelowField is a WhitespaceField that
+
+	has Real left <- (if ((this getPreviousSibling) is nothing) 0.0 (this getPreviousSibling).left)
+	has Real top <- (if ((this getPreviousSibling) is nothing) 0.0 (this getPreviousSibling).top)
+	has Real width <- (if ((this getPreviousSibling) is nothing) 0.0 (this getPreviousSibling).width)
+	has Real height <- 
+		(if ((text length) greaterThanOrEqualTo 1) 
+			(textLayout.bottomExtent minus font.descent)
+			0.0
+		)
+	has Bool hidden = false
+	has Real vPad = 3.0
+
+	when event (@text ValueChanged)
+		(if ((text length) isEquivalentTo 0)
+			(this focusOnPreviousField))
+
+.
+
+a LeadingWhitespaceField is a WhitespaceField that
+
+	has Real top <- 0.0
+	has Real left <- 0.0
+	has Bool hidden = false
+	has Bool focusable = true
+	has Real scale = 1.0
+
+.
+
+# A whitespace that goes after its parents previous sibling's right
+a WrapWhitespace is a WhitespaceField that
+
+	has TextLayout textLayout = (a WrappingTextLayout font<-font text<-text)
+
+	has Real top <- (if (parent is nothing) 0.0 (this getPreviousSibling).top)
+	has Real left <- (if (parent is nothing) 0.0 (parent.children first).right)
+
+	a WrappingTextLayout is a TextLayout that
+
+		has Real hangingIndentation <-
+			(cond 
+				(parent is nothing) 0.0 
+				((parent getPreviousSibling) is nothing) 0.0
+				true (0.0 minus (parent getPreviousSibling).right)
+			)
+		
+	.
+
+.
+
+an IndentWhitespaceBelow is a WhitespaceField that
+
+	has TextLayout textLayout = (a IndentedWrappingTextLayout font<-font text<-text)
+
+	has Real top <- (if (parent is nothing) 0.0 (this getPreviousSibling).bottom)
+	has Real left <- (if (parent is nothing) 0.0 (parent.children first).right)
+
+	an IndentedWrappingTextLayout is a TextLayout that
+
+		has Real hangingIndentation <-
+ 			(cond
+				(parent is nothing) 0.0 
+				((enclosing getPreviousSibling) is nothing) 0.0
+				true ((enclosing getPreviousSibling).left plus (enclosing getStyle).indentation)
+			)
+		
+	.
+
+.
+
+a WhitespaceBelow is a WhitespaceField that
+
+	has TextLayout textLayout = (a WrapBelowTextLayout font<-font text<-text)
+
+	has Real top <- (if (parent is nothing) 0.0 (this getPreviousSibling).top)
+	has Real left <- (if (parent is nothing) 0.0 (parent.children first).right)
+
+	an WrapBelowTextLayout is a TextLayout that
+
+		has Real hangingIndentation <-
+			(if (parent is nothing) 0.0 (enclosing getPreviousSibling).left)
+		
+	.
+
+.
+

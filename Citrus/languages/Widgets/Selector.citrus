@@ -1,0 +1,51 @@
+language Widgets
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.transitions"
+
+# Given an arbitrary set of views, maintains a selection among the views.
+a Selector is a View that
+
+	has View selection = (children first)
+	has Real hPad = 5.0
+	has Real vPad = 5.0
+	has Layout layout = (a HorizontalLayout spacing=5.0)
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Bool clipsChildren = false
+
+	has List<Paint> background = [
+		(a FilledRectanglePaint 
+			primaryColor=(a Color r=0.0 g=0.0 b=0.0 alpha=64.0)
+			cornerWidth=10.0 cornerHeight=10.0
+		)]
+	has List<Paint> foreground = [(a SelectionBorder)]
+
+	a SelectionBorder is a RectanglePaint that
+	
+		has Color primaryColor = (a Color r=100.0 g=100.0 b=255.0)
+		has Real stroke = 3.0
+		has Real cornerWidth = 10.0
+		has Real cornerHeight = 10.0
+		has Real alpha <- (if (selection is nothing) 0.0 1.0)
+		has Real left <- (if (selection is nothing) 0.0 selection.left)
+		has Real top <- (if (selection is nothing) 0.0 selection.top minus)
+		has Real right <- (if (selection is nothing) 0.0 (enclosing.width minus selection.right))
+		has Real bottom <- (if (selection is nothing) 0.0 (enclosing.height minus selection.bottom))
+	
+	.
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a MouseButton.Pressed) action=
+			(fun [ refs View view refs Event event ]
+				(do
+					(@selection set (this getChildThatContains event.point))
+					true
+				)))
+	]
+
+.

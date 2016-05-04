@@ -1,0 +1,88 @@
+language HTML
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+an HTMLBody is a View that	
+
+	has List<View> children = []
+	
+	has Layout layout = (a VerticalLayout)
+	has Real width <- 300.0
+	has Real height <- ((this lastChildsBottom) max 20.0)
+	has Bool clipsChildren = false
+.
+
+an HTMLElement is an abstract View that.
+
+a Paragraph is a HTMLElement that
+
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Layout layout = (a HorizontalLayout)
+	has Real hPad = 3.0
+	has Real vPad = 5.0
+	has Bool clipsChildren = false
+
+.
+
+a TextBlock is an HTMLElement that
+
+	has Text text = ?
+	has List<View> children = [(a Label text=text)]
+
+	has Real width <- (this widestChildsWidth)
+	has Real height <- (this lastChildsBottom)
+	has Bool clipsChildren = false
+
+.
+
+an ImageBlock is a HTMLElement that
+
+	has Text imageName = ?
+	has Image image = (this getImage imageName)
+	has Real width <- (image width)
+	has Real height <- ((width divide (image width)) times (image height))
+
+	has List<Paint> content = [(an ImagePaint width=width image=image)]
+
+.
+
+a Center is a HTMLElement that
+
+	has Layout layout = (a VerticalLayout alignment="centered")
+	has Real width <- (this parentsWidth)
+	has Real height <- (this lastChildsBottom)
+
+.
+
+an Anchor is an HTMLElement that
+
+	has Text text = ?
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this lastChildsBottom)
+	has static Color linkColor = (a Color r=0.0 b=255.0 g=0.0)
+	has List<View> children = [(a Label color=Anchor.linkColor text=text)]
+	has List<Paint> foreground = [(a LinePaint x1=0.0 x2=1.0 y1=1.0 y2=1.0 primaryColor=Anchor.linkColor)]
+.
+
+a JavaBlock is an HTMLElement that
+
+	has Element java = ?
+	
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this lastChildsBottom)
+	has List<View> children = [ (@java toView) ]
+	has Real hPad = 2.0
+	has Real vPad = 2.0
+
+	has List<Paint> background = [
+		(a FilledRectanglePaint primaryColor = (a Color r=220.0 g=220.0 b=220.0))
+	]
+	
+.

@@ -1,0 +1,130 @@
+language JavaViews
+
+uses "Java"
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+a JavaStyle is a Style that
+
+	has Real indentation = 20.0
+	has Real linespacing = 1.0
+	has constant Layout textFlowLayout = (a TextFlowLayout linespacing=linespacing)
+	
+	has constant Transition longTransition = (a FastToSlow duration=500.0)
+	
+	has constant Color widgetGray = inactiveColor
+
+	has constant Color activeColor = lightJavaColor
+	has constant Color inactiveColor = darkJavaColor
+	has constant Color borderColor = (a Color r=0.0 g=0.0 b=0.0)
+
+	has constant Color lighterJavaColor = (a Color r=223.0 g=239.0 b=255.0)
+	has constant Color lightJavaColor = (a Color r=148.0 g=173.0 b=181.0)
+	has constant Color darkJavaColor = (a Color r=107.0 g=132.0 b=148.0)
+	has constant Color darkerJavaColor = (a Color r=107.0 g=132.0 b=148.0)
+	
+	# Used for highlighting auto complete menus
+	has constant Color highlightColor = (a Color r=255.0 g=255.0 b=255.0 alpha=200.0)
+	# Used for highlighting pairs of delimiters
+	has constant Color selectionColor = (a Color r=126.0 g=126.0 b=255.0 alpha=200.0)
+
+	has constant Layout vertical = (a VerticalLayout spacing=5.0)
+	has constant FontFace cueFont = (a FontFace family="Arial" style="italic" size=16.0)
+	has constant Color cueColor = (a Color r=220.0 g=220.0 b=220.0)
+
+	has constant FontFace plainFont = identifierFont
+
+	has constant Paint syntaxErrorPaint =
+		(a PaintPaint paint=[
+			(a FilledRectanglePaint 
+				cornerWidth=15.0 cornerHeight=15.0
+				left=-3.0 right=-3.0 top=-3.0 bottom=-3.0
+				primaryColor=syntaxErrorColor
+			)
+			(a RectanglePaint 
+				cornerWidth=15.0 cornerHeight=15.0
+				left=-3.0 right=-3.0 top=-3.0 bottom=-3.0
+				primaryColor=(a Color r=255.0 g=0.0 b=0.0)
+			)
+			]
+		)
+
+	########################
+	# Token fonts and colors
+	########################
+
+	has constant FontFace whitespaceFont = (a FontFace family="Courier New" size=12.0)
+
+	has constant FontFace literalFont = (a FontFace family="Courier New" size=14.0)
+	has constant Color literalColor = darkJavaColor
+
+	has constant FontFace delimiterFont = (a FontFace family="Courier New" size=16.0)
+	has constant Color delimiterColor = (a Color r=32.0 g=32.0 b=32.0)
+
+	has constant FontFace keywordFont = (a FontFace family="Gill Sans" style="bold" size=12.0)
+	has constant Color keywordColor = darkJavaColor
+
+	has constant FontFace primitiveFont = (a FontFace family="Courier New" size=12.0 style="italic")
+	has constant Color primitiveColor = (a Color r=136.0 g=19.0 b=97.0)
+
+	has constant FontFace identifierFont = (a FontFace family="Gill Sans" style="plain" size=14.0)
+	has constant Color identifierColor = (a Color r=0.0 g=0.0 b=0.0)
+
+	has constant FontFace declarationFont = (a FontFace family="Gill Sans" style="bold" size=14.0)
+	has constant FontFace typeReferenceFont = (a FontFace family="Courier New" style="italic" size=14.0)
+	has constant FontFace packageReferenceFont = (a FontFace family="Courier New" style="italic" size=14.0)
+	has constant FontFace variableReferenceFont = (a FontFace family="Courier New" size=14.0)
+	has constant FontFace methodReferenceFont = (a FontFace family="Courier New" style="italic" size=14.0)
+
+	has constant FontFace operatorFont = identifierFont
+	has constant Color operatorColor = (a Color r=0.0 g=150.0 b=0.0)
+
+	has constant FontFace commentFont = (a FontFace family="Courier New" style="bold" size=12.0)
+	has constant Color commentColor = (a Color r=42.0 g=111.0 b=0.0)	
+
+	has constant FontFace shortcutFont = (a FontFace family="Lucida Sans" size=12.0 style="italic")
+
+	has constant Color focusColor = (a Color r=94.0 g=110.0 b=255.0 alpha=64.0)
+	has constant Paint focusPaint = (a FilledRectanglePaint primaryColor=focusColor cornerWidth=5.0 cornerHeight=5.0)
+
+	has constant Color listFocusColor = (a Color r=225.0 g=225.0 b=225.0 alpha=255.0)
+	has constant Paint listFocusPaint = (a FilledRectanglePaint primaryColor=listFocusColor)
+
+	has constant Color syntaxErrorColor = (a Color r=255.0 g=180.0 b=180.0)
+	has constant Color bindingErrorColor = (a Color r=255.0 g=0.0 b=0.0)
+	has constant Color warningColor = (a Color r=255.0 g=255.0 b=0.0)
+
+	has constant Paint splitPaneHorizontalDividerPaint = (a FilledRectanglePaint primaryColor=activeColor)
+	has constant Paint splitPaneVerticalDividerPaint = (a FilledRectanglePaint primaryColor=activeColor)
+
+	has constant Paint scrollBarPaint = (a FilledRectanglePaint primaryColor=inactiveColor cornerWidth=5.0 cornerHeight=5.0)
+	has constant Paint scrollBarTrackPaint = (a FilledRectanglePaint primaryColor=activeColor cornerWidth=5.0 cornerHeight=5.0)
+	has constant Paint scrollBarWidth = 10.0
+
+	has constant Paint selectionPaint = (a FilledRectanglePaint primaryColor=selectionColor)
+
+	has constant Paint menuPaint = 
+		(a PaintPaint paint=
+			[
+				(a FilledRectanglePaint primaryColor=borderColor
+					alpha=0.1 left=-8.0 right=-8.0 bottom=-8.0 cornerWidth=4.0 cornerHeight=4.0)
+				(a FilledRectanglePaint primaryColor=lightJavaColor)
+				(a RectanglePaint primaryColor=borderColor)
+			]
+		)
+
+	has constant Real spaceWidth = variableReferenceFont.spaceWidth
+	has constant Layout spaceWidthSpaced = (a HorizontalLayout alignment="top-aligned" spacing=0.0)
+	
+	# Events
+	has constant Event autoCompleteEvent = (a Keyboard.Pressed key="escape")
+	has constant Event pasteEvent = (a Keyboard.Pressed key="V" meta=true)
+	has constant Event copyEvent = (a Keyboard.Pressed key="C" meta=true)
+
+		
+. 

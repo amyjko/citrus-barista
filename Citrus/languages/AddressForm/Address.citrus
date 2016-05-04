@@ -1,0 +1,123 @@
+language Address
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+init
+(do
+	((an AddressDialog) show)
+)
+
+an AddressDialog is an App that
+
+	has Real width = 280.0
+	has Real height = 180.0
+
+	has Text firstName = "" for which ((firstName isEmpty) not)
+	has Text lastName = "" for which ((lastName isEmpty) not)
+	has Text address = "" for which (address matches "[0-9]+ [a-zA-Z ]+")
+	has Text city = "" for which (city matches "[A-Za-z ]+")
+	has Text state = "" for which (state matches "[A-Z][A-Z]")
+	has Text zip = "" for which (zip matches "[0-9]{5}")
+
+	has Layout layout = (a VerticalLayout)
+	has List<View> children = [ (a Boxes) ]
+
+	refs Button okay = 
+		(a Button 
+			left=0.0 
+			top<-'((this previousSiblingsBottom) plus 5.0) 
+			label=(a Label text="OK")
+			enabled<-(fun [] fieldsAreValid)
+		)
+
+	rule fieldsAreValid
+	  ((@firstName isValid) and (@lastName isValid) (@address isValid) (@city isValid) (@state isValid) (@zip isValid))
+
+	when event (@fieldsAreValid ValueChanged)
+		(debug "Fields are valid changed to " fieldsAreValid)
+	
+	a Boxes is a View that
+
+		has Real left <- (if (parent is nothing) 0.0 ((parent.width minus (this paddedWidth)) divide 2.0)) 
+		has Real top <- (if (parent is nothing) 0.0 ((parent.height minus (this paddedHeight)) divide 2.0))
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this bottommostChildsBottom) 
+
+		has Real vPad = 5.0
+		has Real hPad = 5.0
+	
+		has List<View> children = [
+			(a AddressLabel left=0.0 text="First")
+			(an AddressField left=40.0 width=75.0 property=@firstName)
+			(a AddressLabel text="Last")
+			(an AddressField width=75.0 property=@lastName)
+			(a AddressLabel left=0.0 top<-'((this previousSiblingsBottom) plus 5.0) text="Street")
+			(an AddressField left=40.0 width=190.0 property=@address)
+			(a AddressLabel left=0.0 top<-'((this previousSiblingsBottom) plus 5.0) text="City")
+			(an AddressField left=40.0 width=50.0 property=@city)
+			(a AddressLabel text="State")
+			(an AddressField width=20.0 property=@state)
+			(a AddressLabel text="Zip")
+			(an AddressField width=40.0 property=@zip)
+			okay
+			(a Button left<-'((this previousSiblingsRight) plus 5.0) top<-'(this previousSiblingsTop) label=(a Label text="Cancel"))
+		]
+
+	.	
+
+.
+
+an AddressLabel is a Label that
+
+	has Real left <- ((this previousSiblingsRight) plus 5.0)
+	has Real top <- (this previousSiblingsTop)
+
+.
+
+a AddressField is a TextField that
+
+	has Real left <- ((this previousSiblingsRight) plus 5.0)
+	has Real top <- (this previousSiblingsTop)
+
+	refs Paint errorPaint = (an ErrorPaint)
+	has static Paint focusPaint = (a RectanglePaint primaryColor=(a Color r=0.0 g=0.0 b=255.0 alpha=128.0) stroke=2.0 cornerWidth=10.0 cornerHeight=5.0)
+	has List<Paint> background = [ (a FilledRectanglePaint primaryColor=(a Color r=220.0 g=220.0 b=220.0) )errorPaint ]
+
+	has List<Behavior> behaviors = ([
+		(a Behavior event=(an App.FocusReceived) action=
+			'(do (background append AddressField.focusPaint) true))
+		(a Behavior event=(an App.FocusLost) action=
+			'(do (background remove AddressField.focusPaint) true))
+		(a Behavior event=(a Keyboard.Typed) action=
+			(fun [ refs View view refs Event event ]
+				(do
+					(if (event.character isEquivalentTo `\b`)
+						(this backspace)
+						(this insert event.character)
+					)
+					true
+				)
+			)
+		)
+	] appendList super)
+
+	when event (property ValidityChanged)
+		(if (property isValid)
+			(errorPaint.@alpha set 0.0)
+			(errorPaint.@alpha set 255.0)
+		)
+
+	an ErrorPaint is a FilledRectanglePaint that
+	
+		has Color primaryColor = (a Color r=255.0 g=0.0 b=0.0 alpha=128.0)		
+		has Real alpha=1.0
+		
+	.
+
+.

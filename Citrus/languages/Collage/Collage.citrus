@@ -1,0 +1,121 @@
+language Collage
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+init ((a CollageWindow) show)
+
+a CollageWindow is an App that
+
+	has Real width = 591.0
+	has Real height = 591.0
+	
+	refs View selection <- canvas.handles.selection
+	refs View canvas = (a Canvas)
+	has Layout layout = (a VerticalLayout)
+	has List<View> children = [ canvas (a ControlPanel) ]
+
+.
+
+a ControlPanel is a View that
+
+	has Real width <- (this parentsWidth)
+	has Real height <- (this tallestChildsHeight)
+
+	has Layout layout = (a HorizontalLayout spacing=5.0)
+	has Real hPad = 3.0
+	has Real vPad = 3.0
+	has List<Paint> background = [ (a FilledRectanglePaint primaryColor=(a Color r=255.0 g=230.0 b=90.0)) ]
+	
+	has List<View> children = [
+		(a Button label=(a Label text="Bring to Front") 
+			enabled<-(fun []
+				((((this ownerOfType CollageWindow) is nothing) not) and 
+					(((this ownerOfType CollageWindow).selection is nothing) not)))
+			action='(parent.parent.selection bringToFront)
+		)
+		(a Button label=(a Label text="Send to back")
+			enabled<-(fun []
+				((((this ownerOfType CollageWindow) is nothing) not) and 
+					(((this ownerOfType CollageWindow).selection is nothing) not)))
+			action='(parent.parent.selection bringToFront)
+		)
+	]
+	
+.
+
+a Canvas is a View that
+
+	has List<Image> images = (this getImages "./Citrus/languages/Collage/images")
+	has List<Paint> background = [ (an ImagePaint image=(this getImage "./Citrus/languages/Collage/canvas.jpg")) ]
+	has Real width <- (this parentsWidth)
+	has Real height <- (this parentsRemainingHeight)
+	refs SelectionHandles handles = (a SelectionHandles)
+	has List<View> children = [ (a Pictures) handles ]
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a MouseButton.Pressed) action=
+			'(do (handles.@selection set nothing) true))		
+	]
+		
+	a Pictures is a View that
+
+		has Real width <- (this parentsWidth)
+		has Real height <- (this parentsHeight)
+	
+		has List<View> children = 
+			(do
+				refs List<View> pictures = []
+				refs Real l = 5.0
+				refs Real t = 5.0
+				(images foreach
+					(fun [ refs Image img ] 
+						(do
+							(pictures append (a CollagePicture left=l top=t width=100.0 image=img))
+							(@l set (l plus 105.0))
+							(if (l greaterThan 400.0) (do (@l set 0.0) (@t set (t plus 155.0))))
+						)))
+				pictures
+			)
+	.
+
+.
+
+a CollagePicture is a View that
+
+	has Image image = ?
+	has List<Paint> content = [ (an ImagePaint width<-(fun [] width) image=image) ]
+	has List<Paint> background = [ (a FilledRectanglePaint) ]
+
+	has Real width = (image width)
+	has Real height <- ((width divide (image width)) times (image height))
+	
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a MouseButton.Pressed) action=
+			(fun [ refs View view refs Event event ]
+				(do 
+					(parent.parent.handles.@selection set this) 
+					(this bringToFront)
+					(parent.parent.handles reactTo event)
+					true
+				)))
+	]
+
+	fun Nothing bringToFront [] (do
+		refs View par = parent
+		(par.children remove this)
+		(par.children append this)
+		(this postDamage)
+	)
+		
+	fun Nothing sendToBack [] (do
+		refs View par = parent
+		(par.children remove this)
+		(par.children insert this)
+		(this postDamage)
+	)	
+.

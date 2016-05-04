@@ -1,0 +1,67 @@
+language RegularExpressionDemo
+
+# We import citrus since we're making views
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+init
+(do
+	((a RegularExpressionDemo) show)
+)
+
+a RegularExpressionDemo is an App that
+
+	has Real width = 200.0
+	has Real height = 200.0
+	
+	has Layout layout = (a VerticalLayout)
+	has Text blah = "0"
+		for which (blah matches "[0-9]+") 
+	has List<View> children = [ (a DemoField property=@blah) ]
+
+.
+
+a DemoField is a TextField that
+
+	has Real left <- (if (parent is nothing) 0.0 ((parent.width minus (this paddedWidth)) divide 2.0)) 
+	has Real top <- (if (parent is nothing) 0.0 ((parent.height minus (this paddedHeight)) divide 2.0)) 
+
+	refs Paint errorPaint = (an ErrorPaint)
+	has List<Paint> background = [ (a FilledRectanglePaint primaryColor=(a Color r=220.0 g=220.0 b=220.0) )errorPaint ]
+
+	has List<Behavior> behaviors = ([
+		(a Behavior event=(a Keyboard.Typed) action=
+			(fun [ refs View view refs Event event ]
+				(do
+					(if (event.character isEquivalentTo `\b`)
+						(this backspace)
+						(this insert event.character)
+					)
+					true
+				)
+			)
+		)
+	] appendList super)
+
+	when event (property ValidityChanged)
+		(do
+			(debug "validity changed to " (property isValid))
+		(if (property isValid)
+			(errorPaint.@alpha set 0.0)
+			(errorPaint.@alpha set 255.0)
+		)
+	)
+
+	an ErrorPaint is a FilledRectanglePaint that
+	
+		has Color primaryColor = (a Color r=255.0 g=0.0 b=0.0 alpha=128.0)		
+		has Real alpha=0.0
+		
+	.
+
+.

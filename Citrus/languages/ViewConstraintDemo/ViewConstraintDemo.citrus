@@ -1,0 +1,39 @@
+language ViewConstraintDemo
+
+# We import citrus since we're making views
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+init
+(do
+	((a ViewConstraintDemo) show)
+)
+
+a ViewConstraintDemo is an App that
+
+	has Real width = 200.0
+	has Real height = 200.0
+
+	has Text blah = ""
+	has Layout layout = (a VerticalLayout alignment="centered" spacing=5.0)
+	has List<View> children = [
+		(a Button 
+			top=5.0
+			label=(a Label text="New") action=(fun [] (children appendOverTime (a GreenBox) (a Uniform duration=200.0))))
+		(a GreenBox)
+	]
+
+.
+
+a GreenBox is a View that
+
+	has List<Paint> background = [(a FilledRectanglePaint primaryColor=(a Color r=255.0 g=0.0 b=0.0) cornerWidth=5.0 cornerHeight=5.0)]
+	has Real width = 15.0
+	has Real height = 15.0
+	
+.

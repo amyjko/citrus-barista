@@ -1,0 +1,430 @@
+language Barista
+
+uses "edu.cmu.hcii.citrus.views.transitions"
+
+# Describes expansions - entities that may occur on the
+# right hand sides of productions.  This is the base class of
+# a bunch of other more specific classes.
+an Expansion is an Element that
+
+	has Function before = nothing
+	has Function after = nothing
+
+	# Every expansion knows the order of its non-terminals properties
+	has List propertyOrder = 
+		(let [ refs List order = [] ] 
+			(do
+				(this generatePropertyOrder order)
+				order
+			)
+		)
+
+	fun Bool isOptional [] true
+
+.
+
+a Production is an Expansion that
+
+	has Type type = nothing
+	has Expansion expansion = ?
+	
+	# Push a type on the stack by default
+	fun Bool eval [ refs ParseAction action refs Bool required ]
+		(do
+			(if ((type is nothing) not) (action pushStructure (a type)))
+			(expansion eval action required)
+		)	
+
+	# Just evaluate the expansion
+	fun Bool look [ refs ParseAction action refs Bool required ]
+		(expansion look action required)
+
+	fun Nothing generatePropertyOrder [ refs List properties ] (expansion generatePropertyOrder properties)
+	fun Expansion getExpansionForProperty [ refs Text name ] (expansion getExpansionForProperty name)
+	fun Nothing generateAutoCompleteActions [ refs Expansion expansionToExecute refs List actions refs Structure context ]
+		(expansion generateAutoCompleteActions expansionToExecute actions context)
+
+	fun Text toText [] (type.name + " ::= " (expansion toText))
+	
+.
+
+a NonTerminal is an Expansion that
+
+	# The type of Element that this expects to process.
+	has Type type = ?
+	# The name of the property that this non-terminal maps to
+	has Text property = ""
+	# Whether or not to immediately assign it to the structure on the stack.
+	has Bool assign = (if (property isEmpty) false true)
+	# A lookahead expansion that determines whether to handle this non-terminal
+	has Expansion lookahead = nothing
+
+	fun Nothing execute [ refs List stack ]
+		(if type.concrete 
+			(if (property isEmpty)
+				(stack insert (a type))
+				(let [ refs Property p = ((stack first) getProperty property) ]
+					(if ((p get) isa List)
+						((p get) appendOverTime (a type) (a Uniform duration=250.0))
+						(p set (a type) (a Uniform duration=250.0))
+					)
+				)
+			)
+			(debug "Can't generate an abstract type!")
+		)
+
+	fun Bool eval [ refs ParseAction action refs Bool required ]
+		(action handleNonTerminal this required)
+
+	fun Bool look [ refs ParseAction action refs Bool required ]
+		(let [ refs Bool success = true ]
+			(do
+				# If there's a lookahead, evaluate this before evaluating for real.
+				(if ((lookahead is nothing) not)
+					(do
+						# Mark the lookahead point
+						(action lookAhead)
+						(action markDecisionPoint)
+						(@success set (lookahead look action required))
+						(action rollbackDecisions)
+						(action lookBack)
+					)
+				)
+				(if success 
+					(action handleLookAhead this required)
+				 	false
+				)
+			)
+		)
+
+	fun Nothing generatePropertyOrder [ refs List properties ] (if ((property isEmpty) not) (properties append property))
+	fun Expansion getExpansionForProperty [ refs Text name ] (if (property isEquivalentTo name) this nothing)
+	fun Nothing generateAutoCompleteActions [ refs Expansion expansionToExecute refs List actions refs Structure context ]
+		(cond
+			(type isErroneous)
+				true
+			type.concrete 
+				(actions append (an AutoCompleteAction expansionToExecute=expansionToExecute expansionToInsert=this context=context))
+			true (type.grammar generateAutoCompleteActions expansionToExecute actions context)
+		)
+	
+	fun Bool isOptional [] false
+
+	fun Text toText [] (property + "=" type.name)
+
+.
+
+# (e1 | e2 | ...). Expects its expansions to have lookaheads of their own.
+a Choice is an Expansion that
+
+	has List expansions = ?
+
+	# Just evaluate the expansion we chose.
+	fun Bool eval [ refs ParseAction action refs Bool required ]
+		((action popDecision) eval action false)
+
+	# Looks ahead on each choice to see if it will suceed. If it finds one, it 
+	# runs it and returns true. Otherwise, it returns false.
+	fun Bool look [ refs ParseAction action refs Bool required ]
+		# Figure out which expansion to evaluate
+		(let [ refs Expansion choice ] 
+			(do
+				# What is the first choice that will succeed?
+				(expansions foreachUntilFalse
+					(fun [ refs Expansion expansion ] 
+						(do
+							(debug (this toText) ": Trying " (expansion toText))
+							
+							# Hedge our bets and record our decision points
+							(action lookAhead)
+							(action markDecisionPoint)
+
+							# Assume that we'll succeed for now...
+							(action pushDecision expansion)
+
+							# Lookahead on the expansion
+							(if (expansion look action false)
+								# If we we're successful, remember our choice, and stop looping
+								(do
+									(action unmarkDecisionPoint)
+									(action unmarkRollback)
+									(debug (this toText) ": Chose " (expansion toText))
+									(@choice set expansion) 
+									false
+								)
+								# If it failed, restore the previous state and continue looping
+								(do
+									(action lookBack)
+									(action rollbackDecisions)									
+									(debug (this toText) ": Didn't choose " (expansion toText))
+									true
+								)
+							)
+						)
+					)
+				)
+				# Return true if we chose something, false otherwise
+				((choice is nothing) not)
+			)
+		)
+
+	fun Nothing generatePropertyOrder [ refs List properties ] ((expansions first) generatePropertyOrder properties)
+	fun Expansion getExpansionForProperty [ refs Text name ] ((expansions first) getExpansionForProperty name)
+	fun Nothing generateAutoCompleteActions [ refs Expansion expansionToExecute refs List actions refs Structure context ]
+		(expansions foreach
+			(fun [ refs Expansion e ]
+				(e generateAutoCompleteActions expansionToExecute actions context)))
+
+	fun Bool isOptional [] false
+	fun Text toText [] ("(" + (expansions toFormattedText " | " false) ")")
+	
+.
+
+# e+
+a OneOrMore is an Expansion that
+
+  	has Expansion expansion = ?
+
+	fun Text toText [] ("" + (expansion toText) "+")
+
+	fun Bool eval [ refs ParseAction action refs Bool required ]
+		(do
+			(while ((action peekDecision) is expansion)
+				(do
+					(action popDecision)
+					(expansion eval action false)
+				)
+			)
+			true
+		)
+
+	# Evaluates its expansion once and returns false if it the expansion returns false.
+	# Otherwise, it continues evaluating the expansion until a lookahead fails, upon
+	# which we return true.
+	fun Bool look [ refs ParseAction action refs Bool required ]
+		# The first one must succeed, or this fails.
+		(do
+			# We matched one, so record the decision.
+			(action pushDecision expansion)
+			(if (expansion look action false)
+				(let [ refs Bool successful = true ]
+					(do
+						(while successful 
+							(do
+								(action lookAhead)
+								(action markDecisionPoint)
+								(action pushDecision expansion)
+								(debug (this toText) ": Trying " (expansion toText))
+								(@successful set (expansion look action false))
+								(debug (this toText) ": " (if successful "Success" "Failure"))
+								(if successful
+									(do
+										(action unmarkDecisionPoint)
+										(action unmarkRollback) 										
+									)
+									(do
+										(action lookBack)
+										(action rollbackDecisions)
+									)
+								)
+							)
+						)
+						true
+					)
+				)
+				false
+			)
+		)
+
+	fun Nothing generatePropertyOrder[ refs List properties ] (expansion generatePropertyOrder properties)
+	fun Expansion getExpansionForProperty [ refs Text name ] (expansion getExpansionForProperty name)
+	fun Nothing generateAutoCompleteActions [ refs Expansion expansionToExecute refs List actions refs Structure context ]
+		(expansion generateAutoCompleteActions expansionToExecute actions context)
+
+.
+
+# e*
+a ZeroOrMore is an Expansion that
+
+  	has Expansion expansion = ?
+	has Expansion lookahead = expansion
+
+	fun Text toText [] ("" + (expansion toText) "*")
+
+	fun Bool eval [ refs ParseAction action refs Bool required ]
+		(do
+			(while ((action peekDecision) is expansion)
+				(do
+					(action popDecision)
+					(expansion eval action false)
+				)
+			)
+			true
+		)
+
+	# Evaluates its expansion until a lookahead returns false. Always returns true,
+	# since its parent should continue regardless.
+	fun Bool look [ refs ParseAction action refs Bool required ]
+		(let [ refs Bool successful = true ]
+			(do
+				(while successful 
+					(do
+						(action lookAhead)
+						(action markDecisionPoint)
+						(action pushDecision expansion)
+						(debug (this toText) ": Trying " (expansion toText))
+						(@successful set (expansion look action false))
+						(debug (this toText) ": " (if successful "Success" "Failure"))
+						(if successful
+							(do
+								(action unmarkDecisionPoint)
+								(action unmarkRollback) 
+							)
+							(do
+								(action lookBack)
+								(action rollbackDecisions)
+							)
+						)
+					)
+				)
+				true
+			)
+		)
+
+	fun Nothing generatePropertyOrder[ refs List properties ] (expansion generatePropertyOrder properties)
+	fun Expansion getExpansionForProperty [ refs Text name ] (expansion getExpansionForProperty name)
+	fun Nothing generateAutoCompleteActions [ refs Expansion expansionToExecute refs List actions refs Structure context ]
+		(expansion generateAutoCompleteActions expansionToExecute actions context)
+
+.
+
+# [e]
+a Optional is an Expansion that
+
+	has Expansion lookahead = expansion
+  	has Expansion expansion = ?
+
+	fun Text toText [] ("[" + (expansion toText) "]")
+
+	fun Bool eval [ refs ParseAction action refs Bool required ]
+		(do
+			(if (action popDecision) (expansion eval action false))
+			true
+		)
+
+	# Lookshead to see if the expansion will succeed. If it will, evaluates the 
+	# expansion with the action. Always returns true, even if the lookahead fails, 
+	# because its parent should continue either way.
+	fun Bool look [ refs ParseAction action refs Bool required ]
+		(let [ refs Bool successful ] 
+			(do
+				(action lookAhead)
+				(action markDecisionPoint)
+				(action pushDecision true)
+				(debug (this toText) ": Trying for " (lookahead toText))
+				(@successful set (lookahead look action false))
+				(debug (this toText) ": " (if successful "Success" "Failure"))
+				(if successful
+					(do
+						(action unmarkDecisionPoint)
+						(action unmarkRollback)
+					)
+					(do
+						(action rollbackDecisions)
+						(action lookBack)
+						(action pushDecision false)
+					)
+				)
+				true
+			)
+		)
+
+	fun Nothing generatePropertyOrder [ refs List properties ] (expansion generatePropertyOrder properties)
+	fun Expansion getExpansionForProperty [ refs Text name ] (expansion getExpansionForProperty name)
+	fun Nothing generateAutoCompleteActions [ refs Expansion expansionToExecute refs List actions refs Structure context ]
+		(expansion generateAutoCompleteActions expansionToExecute actions context)
+
+.
+
+# (e1 e2 ... )
+a Sequence is an Expansion that
+
+	has List expansions = ?
+
+	fun Text toText [] ("(" + (expansions toFormattedText " " false) ")")
+
+	# We don't have to look for failures, since we wouldn't be evaluating this if it hadn't succeeded
+	fun Bool eval [ refs ParseAction action refs Bool required ]
+		(let [ refs Element success refs Bool ateRequiredToken = false ]
+			(do
+				(expansions foreachUntilFalse
+					(fun [ refs Expansion expansion ]
+						(do
+							(@success set (expansion eval action ateRequiredToken))
+							(if success
+								(if (expansion isa NonTerminal) (@ateRequiredToken set true)))
+							success
+						)
+					)
+				)
+				(if success
+					(if ((after is nothing) not)
+						(eval after action)))
+				success
+			)
+		)
+
+	# Evaluates each expansion in order until an expansion fails (upon which it returns
+	# false, since parsing should not continue), or it runs out of expansions (upon which
+	# it returns true, since it succeeded).
+	fun Bool look [ refs ParseAction action refs Bool required ]
+		(let [ refs Element success refs Bool ateRequiredToken = false ]
+			(do
+				(action lookAhead)
+				(expansions foreachUntilFalse
+					(fun [ refs Expansion expansion ]
+						(do
+							(debug (this toText) ": Looking for " (expansion toText))
+							(@success set (expansion look action ateRequiredToken))
+							(if success
+								(if (expansion isa NonTerminal) (@ateRequiredToken set true))
+								(if (success not) (debug (this toText) ": Didn't find " (expansion toText)))
+							)
+							success
+						)
+					)
+				)
+				(debug (this toText) ": Done. Success = " success)
+				(if success
+					(action unmarkRollback)
+					(action lookBack)
+				)
+				success
+			)
+		)
+
+	fun Nothing generatePropertyOrder [ refs List properties ]
+		(expansions foreach
+			(fun [ refs Expansion e ] (e generatePropertyOrder properties)))
+
+	fun Expansion getExpansionForProperty [ refs Text name ] 
+		(let [ refs Expansion found = nothing ]
+			(do
+				(expansions foreachUntilFalse
+					(fun [ refs Expansion e ] 
+						(do
+							(@found set (e getExpansionForProperty name))
+							(found is nothing)
+						)
+					)
+				)
+				found
+			)
+		)
+
+	fun Nothing generateAutoCompleteActions [ refs Expansion expansionToExecute refs List actions refs Structure context ]
+		(actions append (an AutoCompleteAction expansionToExecute=expansionToExecute expansionToInsert=this context=context))
+
+	fun Bool isOptional [] false
+
+.

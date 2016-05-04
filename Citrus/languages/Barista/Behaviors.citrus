@@ -1,0 +1,545 @@
+language Barista
+
+uses "Java"
+
+uses "Barista"
+uses "Widgets"
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+a BaristaBehaviors is an Element that
+		
+	fun static Nothing addNonTerminalOwners [ refs Set set refs Structure commonAncestor refs Structure structure ]
+		(let [ refs Structure tempOwner = structure ]
+			(while (((tempOwner is nothing) not) and ((tempOwner is commonAncestor) not))
+				(do 
+					(set add tempOwner)
+					(@tempOwner set (tempOwner ownerOfType Structure))
+				)
+			)
+		)	
+
+	# Goes through all of this element's properties and requests ownership,
+	# and goes through all of the property's values properties, etc.
+	fun static Nothing claimOwnership [ refs Element e ]
+		((e getProperties) foreach
+			(fun [ refs Property p ]
+				(let [ refs Element value = (p get) ]
+					(if (((value isa Structure) or (value isa List)) and ((p isReference) not))
+						(do
+							(p requestOwnership)
+							(BaristaBehaviors claimOwnership value)
+						)
+					)
+				)
+			)
+		)
+
+	fun static Nothing commonAncestorOf [ refs List affectedTokens ]
+		(let [
+			refs Structure commonAncestor
+		]
+			(do
+				(affectedTokens foreach
+					(fun [ refs Element item ]
+						(if (commonAncestor is nothing) 
+							(@commonAncestor set (item ownerOfType Structure))
+							(@commonAncestor set (commonAncestor commonAncestorWith item))
+						)
+					)
+				)
+				(@commonAncestor set (commonAncestor ownerOfType Structure))
+				(if (commonAncestor isRoot) (@commonAncestor set commonAncestor.unit))
+				commonAncestor
+			)
+		)	
+
+	# Given a list of affected tokens, determines their common ancestor, generates
+	# a set of affected non terminal owners, and unparses the common ancestor.
+	fun static Nothing unparseAsNecessary [ refs List affectedTokens refs Structure commonAncestor ]
+		(let [
+			refs Set nonTerminalsInfluenced = {}
+			has List unparsedTokens = nothing
+		]
+			(do
+				(nonTerminalsInfluenced add commonAncestor)
+				(affectedTokens foreach
+					(fun [ refs Element item ]
+						(BaristaBehaviors addNonTerminalOwners nonTerminalsInfluenced commonAncestor item)))
+				(@unparsedTokens set (commonAncestor unparse nonTerminalsInfluenced))
+				unparsedTokens
+			)
+		)
+
+
+	# Handling a character being typed in a token. Returns false if failed, true for success.
+	fun static Bool handleCharacterTyped [ refs Char characterTyped refs Int direction refs Structure modifiedToken refs Int indexTypedAt ]
+		(let [
+			refs Bool splittingWhitespace
+			refs List affectedTokens = []
+			refs Structure commonAncestor
+			has List unparsedTokens = nothing
+			has Char indexToFocusOn = nothing
+			refs Elemen tokenWithAdjacentWhitespace = nothing
+			has List charactersToTokenize = []
+			has Tokenizer tokenizer 
+			refs List<Structure> newTokens = nothing
+			refs List<Structure> newTokensCopy = []
+			refs Token lastNewToken = nothing
+			refs Token tokenToFocusOn = nothing
+			refs Int indexInTokenToFocusOn = 0
+			refs Structure newStructure = nothing
+			refs Bool affectsWhitespaceOnly = false
+			has Int newFocusIndex = 0
+			]
+			(do
+				(debug "Handling character typed " characterTyped " in \"" (modifiedToken toText) "\"")
+				
+				# Which token(s) did this affect? And does it affect whitespace?
+				(cond
+					(direction isEquivalentTo -1)
+						(do
+							# If we're backspacing at zero, change the modified token to the token before this.
+							(if (indexTypedAt isEquivalentTo 0)
+								(do
+									# The modified token is instead the token before and the new index is after the whitespace
+									(@modifiedToken set (modifiedToken tokenLeftOf))
+									(@indexTypedAt set ((modifiedToken.token length) plus (modifiedToken.whitespace length)))
+								)
+							)
+							# If we're backspacing over the last of the whitespace in the modified token, 
+							# also retokenize the next token.
+							(if (((modifiedToken.whitespace length) isEquivalentTo 1) and 
+									(indexTypedAt isEquivalentTo ((modifiedToken.token length) plus (modifiedToken.whitespace length))))
+								(@tokenWithAdjacentWhitespace set (modifiedToken tokenRightOf))
+							)
+						)
+					(direction isEquivalentTo 0)
+						(do
+							# If we're deleting at the last index of the modfied token, change the modified token to the token after this.
+						   (if (indexTypedAt isEquivalentTo ((modifiedToken.token length) plus (modifiedToken.whitespace length)))
+								(do
+									(@modifiedToken set (modifiedToken tokenRightOf))
+									(@indexTypedAt set 0)
+								)
+							)
+							# If we're deleting the last whitespace in the modified token, also retokenize the next token.
+							(if (((modifiedToken.whitespace length) isEquivalentTo 1) and
+									((indexTypedAt minus 1) isEquivalentTo ((modifiedToken.token length) plus (modifiedToken.whitespace length))))
+								(@tokenWithAdjacentWhitespace set (modifiedToken tokenRightOf))
+							)
+						)
+					(direction isEquivalentTo 1)
+						(do
+							# If we're inserting non-whitespace after the last index of the modfied token, change the modified token to the token after this.
+						   (if (((characterTyped isWhitespace) not) and 
+									(indexTypedAt isEquivalentTo ((modifiedToken.token length) plus (modifiedToken.whitespace length)))
+									(((modifiedToken tokenRightOf) is nothing) not))
+								(do
+									(@modifiedToken set (modifiedToken tokenRightOf))
+									(@indexTypedAt set 0)
+								)
+								# If we're inserting whitespace at the first index of the modified token, change the modified token to the token before it.
+						   	(if ((characterTyped isWhitespace) and (indexTypedAt isEquivalentTo 0)
+									  (((modifiedToken tokenLeftOf) is nothing) not))
+									(do
+										(@modifiedToken set (modifiedToken tokenLeftOf))
+										(@indexTypedAt set ((modifiedToken.token length) plus (modifiedToken.whitespace length)))
+									)
+								)
+							)
+						)
+					true false
+				)
+				
+				# Append the modified token to the character list
+				(charactersToTokenize appendList (modifiedToken.token toCharList))
+				(charactersToTokenize appendList (modifiedToken.whitespace toCharList))
+				
+				# Append the adjacent token, if there is one.
+				(if ((tokenWithAdjacentWhitespace is nothing) not)
+					(do
+						(charactersToTokenize appendList (tokenWithAdjacentWhitespace.token toCharList))
+						(charactersToTokenize appendList (tokenWithAdjacentWhitespace.whitespace toCharList))
+					)
+				)
+
+				# Remember, the index in the text field is 0-based and the list is 1-based.
+				(cond
+					(direction isEquivalentTo 1)
+						(do
+							# Insert the character typed at the caret index (0 means before the first in the list)
+							(@indexToFocusOn set (indexTypedAt + 1))
+							#(debug "\tInserting " characterTyped " at " indexTypedAt " in " charactersToTokenize ", which is " characterToFocusOn)
+							(charactersToTokenize insertAfterIndex indexTypedAt characterTyped)
+						)
+					(direction isEquivalentTo -1)
+						(do
+							(@indexToFocusOn set (indexTypedAt minus 1))
+							#(debug "\tBackspacing character before " indexTypedAt " in " charactersToTokenize ", which is " (charactersToTokenize itemAt indexTypedAt))
+							(charactersToTokenize removeItemAt indexTypedAt)
+						)
+					(direction isEquivalentTo 0)
+						(do
+							(@indexToFocusOn set (indexTypedAt plus 1))
+							#(debug "\tDeleting character at " indexTypedAt " in " charactersToTokenize ", which is " (charactersToTokenize itemAt indexTypedAt))
+							(charactersToTokenize removeItemAt indexTypedAt)
+						)
+					true (debug "Not modifying tokens since direction was " direction " and not -1, 0, or 1")
+				)
+
+				# Tokenize the new characters
+				(debug "\tTokenizing " charactersToTokenize "...")
+				(@tokenizer set (a JavaTokenizer indexOfInterest=indexToFocusOn characters=charactersToTokenize))
+				(@newTokens set (tokenizer tokenize))
+				(@tokenToFocusOn set tokenizer.ownerOfIndexOfInterest)
+				(@indexInTokenToFocusOn set (tokenizer.indexInOwnerOfInterest - 1))
+				(debug "\tResulted in " newTokens )
+				
+				(cond
+					# If the tokenizer failed, we don't handle this
+					(newTokens is nothing) 
+						(do
+							(debug "Tokenizing " charactersToTokenize " failed")
+							false
+						)
+					# If the only change was whitespace, just set it.
+					(((newTokens length) isEquivalentTo 1) and 
+						((newTokens first) isa (modifiedToken getType)) 
+						(modifiedToken.token isEquivalentTo (newTokens first).token))
+						(do
+							(modifiedToken.@whitespace set (newTokens first).whitespace)
+							((modifiedToken.@whitespace firstView) requestKeyboardFocus (indexInTokenToFocusOn toCitrus))
+							true
+						)
+					true
+						# Otherwise, replace this token with the new tokens and parse
+						(do
+
+							(newTokensCopy appendList newTokens)
+
+							(let [ 	refs Structure left = (modifiedToken structureLeftOf)
+										refs Structure right = (modifiedToken structureRightOf) 
+										refs Bool splittingWhitespace = 
+										 	((direction isEquivalentTo 1) and ((characterTyped isWhitespace) not) 
+												(indexTypedAt greaterThan (modifiedToken.token length)))
+									]
+								(do
+									(if (((left is nothing) not) and (splittingWhitespace not)) (affectedTokens append left))
+									(affectedTokens append modifiedToken)
+									(if ((right is nothing) not) (affectedTokens append right))
+								)
+							)
+
+							(@commonAncestor set (BaristaBehaviors commonAncestorOf affectedTokens))
+							(@unparsedTokens set (BaristaBehaviors unparseAsNecessary affectedTokens commonAncestor))
+
+							(debug "\tCommon ancestor of " affectedTokens " is " commonAncestor)
+							(debug "\tUnparsed " commonAncestor " into " (unparsedTokens toText))
+
+							# Replace the old tokens with the new tokens
+							(debug "\tReplacing " modifiedToken " with " newTokens " ...")
+							(unparsedTokens replaceItemWithItems modifiedToken newTokens)
+
+							# If there was a token with adjacent whitespace, remove it.
+							(if ((tokenWithAdjacentWhitespace is nothing) not) 
+								(unparsedTokens remove tokenWithAdjacentWhitespace))
+
+							(debug "\tParsing " unparsedTokens " with " (((commonAncestor getType) getAbstractGrammar) toText))
+
+							# Parse the new token list
+							(@newStructure set 
+								(a TokensToStructure 
+									tokens=(a TokenStream tokensToParse=unparsedTokens) 
+									autocomplete=false 
+									grammar=((commonAncestor getType) getAbstractGrammar)).structure)
+
+							# If the parse failed, we don't handle this
+							(if (newStructure is nothing)
+								(do
+									(debug "\tParse on " unparsedTokens " failed")
+									false	
+								)
+								(do
+									(debug "\tParse resulted in " newStructure)
+
+									# Make sure all of the properties in the structure own their values if possible
+									(BaristaBehaviors claimOwnership newStructure)								
+									# Replace the old structure with the new structure, implicitly replacing the view
+									((commonAncestor getFirstView) replaceAndFocusOn newStructure "")
+
+									# put the text caret just after it.
+									(cond
+										(tokenToFocusOn is nothing)
+											(debug "Couldn't find owner of character at index " indexToFocusOn "; what about " newTokensCopy)
+
+										true
+											(let [
+												refs View tokenField = 
+													(if (indexInTokenToFocusOn lessThanOrEqualTo (tokenToFocusOn.token length)) 
+														(tokenToFocusOn.@token firstView)
+														(tokenToFocusOn.@whitespace firstView)
+													)
+												]
+												(do
+													(debug "Focusing on " tokenField " at index " indexInTokenToFocusOn)
+													(tokenField requestKeyboardFocus (indexInTokenToFocusOn toCitrus))
+												)
+											)
+									)
+								
+									# Return true, since we've succeeded
+									true
+								)
+							)					
+						)
+					
+				)
+			)
+		)
+
+
+	# Global commands
+	has static Behavior insertComment =
+		(a Behavior description="Insert a Comment"
+			event=(a Keyboard.Typed character=`/`)
+			action=
+				(fun [ has View view has Event event ] 
+					(do (view replaceAndFocusOn (a Comment) "text") true)
+				)
+		)
+
+	###################
+	# TypeDeclarations
+	###################
+
+	refs static AutoCompleteMenu typeDeclarationMenu = 
+		(an AutoCompleteMenu model=
+			{ 
+				BaristaBehaviors.insertClass 
+				BaristaBehaviors.insertInterface 
+				BaristaBehaviors.insertComment 
+			}
+		)
+
+	has static Behavior typeClass =
+		(a Behavior description="Type a Class" event=(a Keyboard.Typed) action=
+			(fun [ has View view has Event event ]
+				(if (event.character isLetter)
+					(view replaceAndFocusOn
+						(an UnparsableTypeDeclaration tokens=[(a Identifier token=(event.character toText))])
+						"tokens"
+					)
+					false
+				)
+			)
+		)
+
+	has static Behavior insertClass = 
+		(a Behavior description="Insert a Class" event=(a Keyboard.Pressed key="C" alt=true) action=
+			(fun [ has View view has Event event ]  
+				(do 
+					(view replaceAndFocusOn 
+						(a Class 
+							modifiers=[(a Public)]
+							declarations=[]
+							)
+						"name"
+					)
+					true
+				)
+			)
+		)
+					
+	has static Behavior insertInterface = 
+		(a Behavior description="Insert a Interface" event=(a Keyboard.Pressed key="I" alt=true) action=
+			(fun [ has View view has Event event ]  
+				(do (view replaceAndFocusOn (a Interface) "modifiers") true)))
+
+	###################
+	# BodyDeclarations
+	###################
+
+	refs static AutoCompleteMenu bodyDeclarationMenu =
+		(an AutoCompleteMenu model=
+			{ 
+				BaristaBehaviors.insertClass 
+				BaristaBehaviors.insertMethod 
+				BaristaBehaviors.insertField 
+				BaristaBehaviors.insertComment 
+			}
+		)
+
+	has static Behavior insertMethod =
+		(a Behavior description="Insert a Method"
+			event=(a Keyboard.Pressed key="M" alt=true)
+			action=
+				(fun [ has View view has Event event ] 
+					(do 
+						(view replaceAndFocusOn 
+							(a Method 
+								modifiers=[(a Public)]
+								body=(a Block statements=[(an EmptyStatement)])
+							)
+							"returnType"
+						)
+						true
+					)
+				)
+		)
+
+	has static Behavior insertField =
+		(a Behavior description="Insert a Field"
+			event=(a Keyboard.Pressed key="F" alt=true)
+			action=
+			(fun [ has View view has Event event ] 
+				(do 
+					(view replaceAndFocusOn 
+						(a Field 
+							modifiers=[(a Public)]
+							type=(a ReferenceType) 
+							fragments=[(a VariableDeclarationFragment)]
+						)
+						"type"
+					) 
+					true)))
+
+	refs static AutoCompleteMenu statementMenu =
+		(an AutoCompleteMenu model={ 
+			BaristaBehaviors.insertComment 
+			BaristaBehaviors.insertFor
+			BaristaBehaviors.insertWhile 
+			BaristaBehaviors.insertIf 
+			BaristaBehaviors.insertSwitch 
+			BaristaBehaviors.insertReturn 
+			BaristaBehaviors.insertThrow
+			BaristaBehaviors.insertBlock
+			BaristaBehaviors.insertExpressionStatement
+			BaristaBehaviors.insertLocalVariable
+		})
+
+	has static Behavior insertFor =
+		(a Behavior description="Insert a For Loop"
+			event=(a Keyboard.Pressed key="F" alt=true)
+			action=(fun [ has View view has Event event ]  (do (view replaceAndFocusOn (a For) "init") true)))
+
+	has static Behavior insertWhile =
+		(a Behavior description="Insert a While Loop"
+			event=(a Keyboard.Pressed key="W" alt=true)
+			action=(fun [ has View view has Event event ]  (do (view replaceAndFocusOn (a While) "condition") true)))
+
+	has static Behavior insertIf =
+		(a Behavior description="Insert an If"
+			event=(a Keyboard.Pressed key="I" alt=true)
+			action=(fun [ has View view has Event event ] (do (view replaceAndFocusOn (a If) "condition") true)))
+	
+	has static Behavior insertSwitch =
+		(a Behavior description="Insert a Switch"
+			event=(a Keyboard.Pressed key="S" alt=true)
+			action=(fun [ has View view has Event event ] (do (view replaceAndFocusOn (a Switch) "") true)))
+
+	has static Behavior insertReturn =
+		(a Behavior description="Insert a Return"
+			event=(a Keyboard.Pressed key="R" alt=true)
+			action=(fun [ has View view has Event event ] (do (view replaceAndFocusOn (a Continue) "condition") true)))
+
+	has static Behavior insertThrow =
+		(a Behavior description="Insert a Throw"
+			event=(a Keyboard.Pressed key="T" alt=true)
+			action=(fun [ has View view has Event event ] (do (view replaceAndFocusOn (a Throw) "") true)))
+
+	has static Behavior insertBlock =
+		(a Behavior description="Insert Block"
+			event=(a Keyboard.Typed character=`{`)
+			action=(fun [ has View view has Event event ] (do (view replaceAndFocusOn (a Block statements=[(an EmptyStatement)]) "statements") true)))
+
+	has static Behavior insertExpressionStatement =
+		(a Behavior description="Insert Expression Statement" event=(a Keyboard.Typed) action=
+			(fun [ refs View view refs Event event ]
+				(let [ 
+					refs List tokens = ((a JavaTokenizer characters=((((view keyboard) getLastCharacterTyped) toText) toCharList)) tokenize)
+					refs Element newStructure
+				]
+					(if (tokens is nothing)
+						false
+						(do
+							(@newStructure set (Expression parse (a TokenStream tokensToParse=tokens)))
+							(if ((newStructure is nothing) not)
+								(view replaceAndFocusOn 
+									(an ExpressionStatement expr=newStructure)
+									"expr"
+								)
+								false
+							)
+						)
+					)
+				)
+			)
+		)
+
+	has static Behavior insertLocalVariable =
+		(a Behavior description="Insert Local Variable"
+			event=(a Keyboard.Pressed key="L" alt=true)
+			action=
+			(fun [ has View view has Event event ] 
+				(do 
+					(view replaceAndFocusOn (a Local fragments=[(a VariableDeclarationFragment)]) "type") 
+					true
+				)
+			)
+		)
+
+
+	has static Behavior typeCharacter =
+		(a Behavior event=(a Keyboard.Typed) action=
+			(fun [ refs View view refs Event event ]
+				(if (event.character isEquivalentTo `\b`) 
+					false
+					(BaristaBehaviors handleCharacterTyped 
+						event.character 
+						1
+						(view.property owner)
+						(if (view isWhitespace)
+							(view.caretIndex plus ((view.property owner).token length))
+							view.caretIndex
+						)
+					)
+				)
+			)
+		)
+
+	has static Behavior backspaceCharacter =
+		(a Behavior event=(a Keyboard.Typed character=`\b`) action=
+			(fun [ refs View view refs Event event ]
+				(BaristaBehaviors handleCharacterTyped 
+					nothing 
+					-1 
+					(view.property owner)
+					(if (view isWhitespace)
+						(view.caretIndex plus ((view.property owner).token length))
+						view.caretIndex
+					)
+				)
+			)
+		)
+
+	has static Behavior deleteCharacter =
+		(a Behavior event=(a Keyboard.Pressed key="delete") action=
+			(fun [ refs View view refs Event event ]
+				(BaristaBehaviors 
+					handleCharacterTyped 
+					nothing 
+					0 
+					(view.property owner)
+					(if (view isWhitespace)
+						(view.caretIndex plus ((view.property owner).token length))
+						view.caretIndex
+					)
+				)
+			)
+		)
+			
+.
+

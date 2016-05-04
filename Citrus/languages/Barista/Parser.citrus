@@ -1,0 +1,504 @@
+language Barista
+
+
+# Given a set of tokens and a grammar, parses the tokens producing a tree.
+# When parsing fails, adds a parse error to the error list.
+a ParseAction is an Element that
+
+	# The central responsibility of this method, from an expansions perspective,
+	# is to tell the grammar engine whether or not to continue down its
+	# current path. Particular expansions may use this true or false decision
+	# in different ways. For example, a ZeroOrMore, if told not to continue,
+	# will stop looping, but will return true to its owner. A sequence told not to 
+	# continue will stop looking down its sequence, and tell whatever expansion 
+	# called it to not continue, since the sequence failed.
+	#
+	# It is very important that any state be restored if this function returns false.
+	# For example, if we've reached this non-terminal in error while building a tree,
+	# we should rollback any tokens we've eaten, in case the engine was trying to look ahead.
+	fun Bool handleNonTerminal [ refs NonTerminal nt ]
+		(do
+			(debug "This generic parse action just returns false to every non-terminal, causing a parse failure")
+			false
+		)
+	
+.
+
+a TokensToStructure is a ParseAction that
+
+	has TokenStream tokens = ?
+	has Expansion grammar = ?
+
+	# A stack of the structures being generated so that each
+	# non-terminal can assign the structure it has generated
+	# (or eaten) to the structure being created.
+	has List<Structure> structures = []
+
+	# If true, inserts missing required tokens (in Sequences and OneOrMores, essentially)
+	has Bool autocomplete = false
+
+	has List decisions = []
+	
+	# A list representing the stack of tokens to rollback to (used for lookahead)
+	has List decisionRollbackCounts = []
+
+	# Accessing this causes the parse to occur.
+	refs Structure structure =
+		(let [ refs Structure result = nothing ]
+			(do
+#				(profiler start)
+				(this lookAhead)
+				(if (grammar look this true)
+					(do
+						(this lookBack)
+						(debug "Executing with decisions ")
+						(decisions foreach (fun [ refs Element item ] (debug "\t\t" (item toText))))
+						(grammar eval this true)
+						(@result set (this popStructure))
+					)
+				)
+#				(profiler stop)
+#				(profiler print)
+				result
+			)
+		)
+
+	fun Nothing lookAhead [] 
+		(tokens markRollback)
+
+	fun Nothing lookBack [] (tokens rollback)
+	fun Nothing unmarkRollback [] (tokens unmarkRollback)
+
+	fun Nothing rollbackDecisions []
+		# If the tokens eaten is empty, then we don't rollback the decisions
+		# because we need them.
+		(let [ refs Int count = (decisionRollbackCounts first) ]
+			(do
+				(while (count greaterThan 0) 
+					(do
+						(@count set (count minus 1))
+						(decisions removeItemAt 1)
+					)
+				)
+				(decisionRollbackCounts removeItemAt 1)
+				(debug "\tDecisions rolled back to = ")
+				(decisions foreach (fun [ refs Element item ] (debug "\t\t" (item toText))))
+			)
+		)
+
+		
+	fun Nothing markDecisionPoint []
+		(do
+			(decisionRollbackCounts insert 0)
+			(debug "\tInserted decision count : " decisionRollbackCounts)
+		)
+
+	fun Nothing unmarkDecisionPoint []
+		(let [ refs Int count = (decisionRollbackCounts first) refs Int second = (decisionRollbackCounts second) ]
+			(if ((second is nothing) not)
+				(do
+					(decisionRollbackCounts removeItemAt 1)
+					(decisionRollbackCounts removeItemAt 1)
+					(decisionRollbackCounts insert (count plus second))
+#					(debug "\tMerged top two decision rollback counts: " decisionRollbackCounts)
+				)
+			)
+		)
+
+	fun Element peekDecision [] (decisions last)
+
+	fun Nothing pushDecision [ refs Element decision ]
+		(let [ refs Int count = (decisionRollbackCounts first) ]
+			(do
+				(decisions insert decision)
+				(if ((count is nothing) not)
+					(do
+						(decisionRollbackCounts removeItemAt 1)
+						(decisionRollbackCounts insert (count plus 1))
+					)
+				)
+#				(debug "\tIncremented decision count. Decisions = ")
+#				(decisions foreach (fun [ refs Element item ] (debug "\t\t" (item toText))))
+			)
+		)
+
+	fun Element popDecision []
+		(let [ refs Element decision = (decisions last) ]
+			(do
+				(decisions removeItemAt (decisions length))
+				decision
+			)
+		)
+	
+	fun Nothing pushStructure [ refs Structure newStructure ]
+		(do
+			(structures insert newStructure)
+			(debug "\tInserted " newStructure " into stack " structures)
+		)
+	
+	fun Structure popStructure []
+		(let [ refs Structure top = (structures first) ]
+			(do
+				# Remove the structure from the list to get to the containing structure
+				(structures removeItemAt 1)
+				(if (top is nothing)
+					(debug "Warning: popping nothing off the structure stack")
+#					(let [ refs Element currentOwner = nothing refs Bool success = true ]
+#						(do
+#							((top getProperties) foreachUntilFalse
+#								(fun [ refs Property p ]								
+#									(cond
+#										(p isReference) true
+#										(currentOwner is nothing) (do (@currentOwner set ((p get) ownerOfType Structure)) true)
+#										true (do (@success set (currentOwner is ((p get) ownerOfType Structure))) success)
+#									)
+#								)
+#							)
+#							(if success
+#								(debug "All of the properties' values in " top " have the same owner: " currentOwner)
+#								(debug top "'s values have different owners")
+#							)
+#						)
+#					)
+				)
+				top
+			)
+		)
+		
+	fun Property getPropertyOfStructureOnTop [ refs Text name ]
+		# Get the property from the structure on top of the stack	
+		(if ((structures first) is nothing)
+			(do 
+				(debug "There's no structure on the stack to assign " (tokens peek) " to.")
+				nothing
+			)
+			# Get the property of the containing structure that we're supposed to be assigning.
+			((structures first) getProperty name)
+		)
+
+	fun Bool maySafelyInsert [ refs Type type refs Bool required ]
+		(autocomplete and required (type isTerminal))
+
+	# Returns true if this complies to the token sequence 
+	fun Bool handleLookAhead [ refs NonTerminal nt refs Bool required ]
+		(cond
+			# Nothing to eat!
+			(tokens isEmpty)
+				(do
+					# We expect an nt.type here. What token do we follow?
+					(if (this maySafelyInsert nt.type required)
+						(do
+							(debug "No tokens, but may safely insert a " nt.type " so returning true.")
+							true
+						)
+						false
+					)
+				)
+			# If the next token is what we expect...
+			(nt.type isTerminal)			 
+				# Yes! It's either a terminal or non-terminal, but we don't care.
+				(if (tokens nextisa nt.type)
+					(do
+						(debug "Ate " (tokens peek) " while looking ahead.")
+						(tokens eat)
+						true
+					)
+					(do
+						# We expect an nt.type here. What token are we after?
+						(if (this maySafelyInsert nt.type required)
+							(do
+								(debug "Didn't expect " (tokens peek) ", but may safely insert a " nt.type " so returning true.")
+								true
+							)
+							(do
+								(debug "Expected " nt.type.name " but " (tokens peek) " wasn't it")
+								false
+							)
+						)
+					)
+				)
+			# This non-terminal's grammar will know if we succeed...
+			true
+				(if ((tokens nextisa nt.type) and (((tokens peek) isTerminal) not))
+					(do 
+						(debug "Ate structural token " (tokens peek) " while looking ahead.")
+						(tokens eat) 
+						true
+					)
+					(nt.type.grammar look this false)
+				)
+		)
+
+	# This is called AFTER the grammar has decided to take this route.
+	fun Bool handleNonTerminal [ refs NonTerminal nt refs Bool required ]
+	(do
+		# Insert any tokens that we've committed to inserting
+		(if ((tokens isEmpty) and (this maySafelyInsert nt.type required))
+			(do
+				(tokens.tokensToParse insert (an nt.type))
+				(debug "\tAuto-inserted a " nt.type.name " because out of tokens")
+				true
+			)
+		)
+		(if (((tokens nextisa nt.type) not) and (this maySafelyInsert nt.type required))
+			(do
+				(tokens.tokensToParse insert (an nt.type))
+				(debug "\tAuto-inserted a " nt.type.name " into " tokens.tokensToParse)
+				true
+			)
+		)
+		(cond
+			
+			# We've run out of tokens!
+			(tokens isEmpty)
+				(do
+					(debug "\tExpected a " nt.type.name " but we ran out of tokens.")
+					(debug "\tTokens are " tokens.tokensToParse)
+					false
+				)
+
+			(nt.type isTerminal)
+				# We're in luck, the next token is of the appropriate type. 
+				# Eat the token, mark the next token as the token to rollback to, and tell
+				# the grammar parser to continue.
+				(if (tokens nextisa nt.type)
+					(do
+						(this pushStructure (tokens eat))
+						(if nt.assign (this popTopIntoPropertyNamed nt.property))
+						true
+					)					
+					# Uh oh. We expected a terminal, but this wasn't it. Rollback to 
+					# just after the last successful token parsed.
+					(do
+						(debug "\tERROR: Expected a token of type " nt.type.name ", not " ((tokens peek) toText) ".")
+						(debug "\t\tTokens are " tokens.tokensToParse)
+						(debug "\t\tStructures are " structures)
+						(debug "\t\tDecisions are ")
+						(decisions foreach (fun [ refs Element item ] (debug "\t\t" (item toText))))
+						false
+					)		
+				)
+
+			# We expected a non-atomic structure of the given type, so we get its
+			# grammar and evaluate it using this action.
+			true
+				(if ((tokens nextisa nt.type) and (((tokens peek) isTerminal) not))
+					(do
+						(this pushStructure (tokens eat))
+						(if nt.assign (this popTopIntoPropertyNamed nt.property))
+					)
+					(let [ refs Bool success refs Property p refs Structure newStructure ] 
+						(if (nt.type.grammar eval this false)
+							(do
+								(if nt.assign (this popTopIntoPropertyNamed nt.property))
+								true
+							)
+							false
+						)
+					)
+				)
+		)
+	)
+
+	fun Bool popTopIntoPropertyNamed [ refs Text name ]
+		# Does this pop and assign?
+		(let [ refs Structure value = (this popStructure) refs Property p = (this getPropertyOfStructureOnTop name) ]
+			(do
+				# First get the value on the stack, then get the property of the 
+				# structure newly on the top of the stack.
+				(cond
+					(p is nothing) (debug "Warning: couldn't find a property named " name " in " (structures first))
+					((p get) isa List) ((p get) append value)
+					true (p set value)
+				)
+				# Eat the token.
+				(debug "\tAssigned " value " to " p)
+				true
+			)
+		)
+		
+.
+
+# A stream of edible and pukeable tokens. Yummy!
+a TokenStream is an Element that
+
+	# The list of tokens, atomic or structral, that should be parsed.
+	has List tokensToParse = ?
+
+	has Int index = 1
+	has Array tokenArray =
+		(let [ refs Array newArray = (array (tokensToParse length)) has Int i = 1 ]			
+			(do
+				(tokensToParse foreach
+					(fun [ refs Element item ] 
+						(do
+							(newArray set i item)
+							(@i set (i plus 1))
+						)
+					)
+				)
+				newArray
+			)
+		)
+	
+	# A list representing the stack of tokens to rollback to (used for lookahead)
+	has List rollbackCounts = []
+
+	# Remove the frontmost token in the tokens to parse
+	fun Structure eat []
+		(let [ refs Expression token=(tokenArray get index)
+				refs Int rollbackCount = (rollbackCounts first) ]
+			(do
+				(@index set (index plus 1))
+
+				(if ((rollbackCount is nothing) not)
+					(do
+						(rollbackCounts removeItemAt 1)
+						(rollbackCounts insert (rollbackCount plus 1))
+					)
+				)
+				token
+			)
+		)
+		
+	# Get, but do not remove, the next token
+	fun Structure peek [] (tokenArray get index) #(tokensToParse first)
+
+	fun Bool nextisa [ refs Type t ] ((tokenArray get index) isa t)
+	fun Bool nextStartsWith [ refs Text prefix ] ((tokenArray get index) startsWith prefix)
+	
+	fun Bool hasNext [] ((index greaterThan (tokenArray size)) not) #((tokensToParse isEmpty) not)
+	fun Bool isEmpty [] (index greaterThan (tokenArray size)) #(tokensToParse isEmpty)
+	
+	fun Structure lastTokenEaten [] (if (index greaterThan 1) (tokenArray get (index minus 1)) nothing)
+
+	# Pushes a new integer on the rollback stack so we can track how many
+	# tokens were eaten.
+	fun Nothing markRollback [] (rollbackCounts insert 0)
+	
+	# Pops the rollback count without rolling back, instead adding the token count
+	# to the next.
+	fun Nothing unmarkRollback[]
+		(let [ refs Int count = (rollbackCounts first) refs Int second = (rollbackCounts second) ]
+			(if ((second is nothing) not)
+				(do
+					(rollbackCounts removeItemAt 1)
+					(rollbackCounts removeItemAt 1)
+					(rollbackCounts insert (count plus second))
+#					(debug "\tMerged top two rollback counts: " rollbackCounts)
+				)
+			)
+		)
+	
+	# Pops tokens off the tokens eat stack until we find the token on the top of the rollback stack
+	fun Nothing rollback [] 
+		(if (rollbackCounts isEmpty)
+			(debug "Can't rollback; no token to rollback to.")
+			(let [ refs Int count = (rollbackCounts first) ]
+				(do
+					(while (count greaterThan 0) 
+						(do
+							(@count set (count minus 1))
+							(@index set (index minus 1))
+						)
+					)
+					(rollbackCounts removeItemAt 1)
+#					(debug "\tRolled back tokens: " rollbackCounts)
+				)
+			)
+		)
+	
+	fun Text toText [] ("TokenStream = " + (tokensToParse toFormattedText " " false))
+
+.
+
+
+a FillExpected is a ParseAction that
+
+	has TokenStream tokens = nothing
+		
+	fun Nothing fill [ refs List newTokens refs Expansion grammar ]
+		(do
+			(@tokens set (a TokenStream tokensToParse=newTokens))
+			(grammar look this true)
+		)
+
+	fun Nothing lookAhead [] (tokens markRollback)
+	fun Nothing lookBack [] (tokens rollback)
+	fun Nothing unmarkRollback [] (tokens unmarkRollback)
+
+	fun Nothing rollbackDecisions [] nothing
+	fun Nothing markDecisionPoint [] nothing
+	fun Nothing unmarkDecisionPoint [] nothing
+
+	fun Nothing peekDecision [] nothing
+	fun Nothing pushDecision [ refs Element decision ] nothing
+	fun Nothing popDecision [] nothing
+	
+	# Returns true if this complies to the token sequence 
+	fun Bool handleLookAhead [ refs NonTerminal nt refs Bool required ]
+		(let [ refs Structure lastTokenEaten = (tokens lastTokenEaten)
+				 refs Structure lastTokenInStructure = (if (lastTokenEaten is nothing) nothing (lastTokenEaten lastTokenIn))
+			  ]
+		(cond
+			# Nothing to eat!
+			(tokens isEmpty)
+				(do
+					(if ((nt.property isEmpty) not)
+						(debug "Should be listing " (nt toText)))
+					(if ((lastTokenInStructure is nothing) not)
+						(if nt.type.concrete
+							(lastTokenInStructure addExpected nt)
+							(nt.type.grammar look this false)
+						)
+					)						
+					false
+				)
+			# Yes! It's either a terminal or non-terminal, but we don't care.
+			(tokens nextisa nt.type)
+				(do 					
+					(tokens eat) 
+					true
+				)
+			# This non-terminals grammar will know if we succeed...
+			((nt.type isTerminal) not)
+				(let [ refs Bool successful ]
+					(do
+						# Add the non-terminal to the type stack, to keep track of what we're evaluating
+						(@successful set (nt.type.grammar look this false))
+						# If we weren't successful, add an expected type here.
+						(if ((successful not) and ((lastTokenInStructure is nothing) not))
+							(do
+								(if ((nt.property isEmpty) not)
+									(debug "Should be listing " (nt toText)))
+								(lastTokenInStructure addExpected nt))
+							)
+						successful
+					)
+				)
+			# No!
+			true
+				(do
+					(if ((lastTokenInStructure is nothing) not)
+						(lastTokenInStructure addExpected nt))
+					false
+				)
+		)
+		)
+
+.
+
+an AutoCompleteAction is an Element that
+
+	refs Expansion expansionToExecute = ?
+	refs Expansion expansionToInsert = ?
+	refs Structure context = ?
+	refs Structure itemToInsertAfter = nothing
+	
+	fun Text toText [] 
+		("Execute " + 
+			(expansionToInsert toText) " in " 
+			(expansionToExecute toText) 
+			" in the context of " (context getType).name)
+	
+.

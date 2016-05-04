@@ -1,0 +1,73 @@
+language Widgets
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.paints"
+
+a TreeView is an View that
+
+	refs View label = ?
+	refs View list = ?
+
+	has View selection = nothing
+	has Bool collapsed = false
+
+	has Layout layout = (a VerticalLayout spacing=5.0)
+	has Real width <- (if collapsed ((children first) lastChildsRight) (this rightmostChildsRight))
+	has Real height <- (if collapsed ((children first) tallestChildsHeight) (this lastChildsBottom))
+	has Bool clipsChildren = false
+	has List<View> children = [(a TreeHeader) list]
+
+	a TreeHeader is a View that
+
+		has Layout layout = (a HorizontalLayout spacing=5.0)
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		has Bool clipsChildren = false
+		has List<View> children = [
+			(a Toggler
+				property=@collapsed 
+				trueView=(a RightArrow)
+				falseView=(a DownArrow))
+			label
+		]
+
+	.
+	
+	a RightArrow is a View that
+	
+		has static List<Paint> rightArrow = [
+			(a PolygonPaint 
+				primaryColor=(a Color r=0.0 g=0.0 b=0.0) 
+				points=[(a Point x=0.0 y=0.0) (a Point x=0.0 y=1.0) (a Point x=1.0 y=0.5)]
+			)
+		]
+
+		has Real width = 10.0
+		has Real height = 10.0
+		has Real top <- (((this parentsHeight) minus height) divide 2.0)
+		has List<Paint> foreground = RightArrow.rightArrow
+		has Bool hidden <- (collapsed not)
+		
+	.
+
+	a DownArrow is a View that
+	
+		has static List<Paint> downArrow = [
+			(a PolygonPaint 
+				primaryColor=(a Color r=0.0 g=0.0 b=0.0) 
+				points=[(a Point x=0.0 y=0.0) (a Point x=1.0 y=0.0) (a Point x=0.5 y=1.0)]
+			)
+		]
+		
+		has Real width = 10.0
+		has Real height = 10.0
+		has Real top <- (((this parentsHeight) minus height) divide 2.0)
+		has List<Paint> foreground = DownArrow.downArrow
+		has Bool hidden <- collapsed
+		
+	.
+
+.

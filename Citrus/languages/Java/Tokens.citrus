@@ -1,0 +1,884 @@
+language Java
+
+uses "Barista"
+
+a JavaTokenizer is an Element that
+
+	refs List<Char> characters = ?
+
+	refs Int currentIndex = 1
+	refs Int indexOfInterest = -1
+	refs Element ownerOfIndexOfInterest = nothing
+	refs Int indexInCurrentToken = 0
+	refs Int indexInOwnerOfInterest = 0
+	refs Token currentToken = nothing
+	refs Bool waitingForOwnerOfCharacterOfInterest = false
+	refs List<Token> tokenList = []
+
+	# Get, but do not remove, the next token
+	fun Char peek [] (characters first)
+	fun Nothing puke [ refs Element character ] (if ((character is nothing) not) (characters insert character))
+	fun Bool hasNext [] ((characters isEmpty) not)
+	
+	fun Char eat []
+		(let [ refs Char character=(this peek) ]
+			(do
+				(if (currentIndex isEquivalentTo indexOfInterest)
+					(@waitingForOwnerOfCharacterOfInterest set true))
+				(@indexInCurrentToken set (indexInCurrentToken plus 1))
+				(characters removeItemAt 1)
+				(@currentIndex set (currentIndex plus 1))
+				character
+			)
+		)
+	
+	# Takes a text string and returns one of:
+	# Returns nothing if it cannot be tokenized, but does its best to automatically
+	# correct common problems such as missing quotes.
+	# Returns nothing if there was a problem tokenizing.
+	fun List tokenize []
+		(let [ 
+			refs Bool error = false
+			refs Char char = (this peek)
+		]
+			(do
+
+				(let [ refs Text whitespace = "" ]
+					(do
+						(while (((this peek) isEquivalentTo ` `) or ((this peek) isEquivalentTo `\n`))
+							(@whitespace set (whitespace + ((this eat) toText)))
+						)
+						(if ((whitespace length) greaterThan 0)
+							(tokenList append (a LeadingWhitespace whitespace=whitespace)))
+					)
+				)								
+
+				(@indexInCurrentToken set 0)
+				# Loop until we run out of characters
+				(while ((error not) and (this hasNext))
+					(do
+
+						# Get the next character
+						(@char set (this peek))
+
+						# Construct the next token
+						(@currentToken set
+							(cond
+
+								# Delimited literals
+								(char isEquivalentTo `'`) (this characterLiteral)							
+								(char isEquivalentTo `"`) (this stringLiteral) # "
+
+								# Identifiers
+								(char isLetter) (this identifierOrBooleanOrNullOrKeyword)
+								
+								# Numbers
+								(char isDigit) (this integerOrFloatingPointLiteral)
+
+								# Separators
+								(char isEquivalentTo `(`) (do (this eat) (a LeftParenthesis))
+								(char isEquivalentTo `)`) (do (this eat) (a RightParenthesis))
+								(char isEquivalentTo `[`) (do (this eat) (a LeftBracket))
+								(char isEquivalentTo `]`) (do (this eat) (a RightBracket))
+								(char isEquivalentTo `{`) (do (this eat) (a LeftBrace))
+								(char isEquivalentTo `}`) (do (this eat) (a RightBrace))
+								(char isEquivalentTo `;`) (do (this eat) (a SemiColon))
+								(char isEquivalentTo `,`) (do (this eat) (a Comma))
+								(char isEquivalentTo `.`) (do (this eat) (a Dot))
+
+								# Operators
+								(char isEquivalentTo `=`) (do (this eat) (a Equals))
+								(char isEquivalentTo `>`) (do (this eat) (a GreaterThanOperator))
+								(char isEquivalentTo `<`) (do (this eat) (a LessThanOperator))
+								(char isEquivalentTo `+`) (do (this eat) (a PlusOperator))
+								(char isEquivalentTo `-`) (do (this eat) (a MinusOperator))
+								(char isEquivalentTo `*`) (do (this eat) (a TimesOperator))
+								(char isEquivalentTo `/`) (do (this eat) (a DivideOperator))
+								(char isEquivalentTo `%`) (do (this eat) (a ModulusOperator))
+															
+								# Nothing!
+								true 
+									nothing
+							)
+						)
+
+						# Append the token to the result list
+						(cond 
+							(currentToken is nothing) (@error set true)
+
+							true
+								(do
+
+									# Append the token to the token list
+									(tokenList append currentToken)
+								
+									# Eat any trailing whitespace, giving it to the new token.
+									(let [ refs Text whitespace = "" ]
+										(do
+											(while ((this hasNext) and (((this peek) isEquivalentTo ` `) or ((this peek) isEquivalentTo `\n`)))
+												(@whitespace set (whitespace + ((this eat) toText)))
+											)
+											(currentToken.@whitespace set whitespace)
+										)
+									)
+
+									# If this token ate the character of interest, remember it.
+									(if waitingForOwnerOfCharacterOfInterest
+										(do
+											(@ownerOfIndexOfInterest set currentToken)
+											(@indexInOwnerOfInterest set indexInCurrentToken)
+											(@waitingForOwnerOfCharacterOfInterest set false)
+										)
+									)
+
+								)
+						)
+
+						# Reset the index for the next token
+						(@indexInCurrentToken set 0)
+		
+					)
+				)
+				
+				# If a token failed to parse, return nothing.
+				(if error nothing tokenList)
+			)
+		)
+
+	fun Token identifierOrBooleanOrNullOrKeyword []
+		(let [ refs Text tokenText = "" refs Char char = (this peek) ]
+			(do
+				(while ((this hasNext) and ((char isLetter) or (char isDigit)))
+					(do
+						(@tokenText set (tokenText cat ((this eat) toText)))
+						(@char set (this peek))
+					)
+				)
+				(cond
+					
+					# Literals
+					(tokenText matches "true|false") (a BooleanLiteral token=tokenText)
+					(tokenText isEquivalentTo "null") (a NullLiteral)
+
+					# Expression keywords
+					(tokenText isEquivalentTo "new") (a NewKeyword)
+					(tokenText isEquivalentTo "this") (a This)
+					(tokenText isEquivalentTo "super") (a Super)
+
+					# Statement keywords
+					(tokenText isEquivalentTo "if") (an IfKeyword)
+					(tokenText isEquivalentTo "else") (a ElseKeyword)
+					(tokenText isEquivalentTo "while") (a WhileKeyword)
+					(tokenText isEquivalentTo "do") (a DoKeyword)
+					(tokenText isEquivalentTo "try") (a TryKeyword)
+					(tokenText isEquivalentTo "throw") (a ThrowKeyword)
+					(tokenText isEquivalentTo "break") (a BreakKeyword)
+					(tokenText isEquivalentTo "for") (a ForKeyword)
+					(tokenText isEquivalentTo "continue") (a ContinueKeyword)
+					(tokenText isEquivalentTo "return") (a ReturnKeyword)
+					(tokenText isEquivalentTo "switch") (a SwitchKeyword)
+					(tokenText isEquivalentTo "assert") (a AssertKeyword)
+
+					# Primitive types
+					(tokenText isEquivalentTo "void") (a Void)
+					(tokenText isEquivalentTo "boolean") (a Boolean)
+					(tokenText isEquivalentTo "double") (a Double)
+					(tokenText isEquivalentTo "short") (a Short)
+					(tokenText isEquivalentTo "char") (a Char)
+					(tokenText isEquivalentTo "long") (a Long)
+					(tokenText isEquivalentTo "float") (a Float)
+					(tokenText isEquivalentTo "int") (an Integer)
+
+					# Modifiers
+					(tokenText isEquivalentTo "public") (a Public)
+					(tokenText isEquivalentTo "protected") (a Protected)
+					(tokenText isEquivalentTo "private") (a Private)
+					(tokenText isEquivalentTo "static") (a Static)
+					(tokenText isEquivalentTo "final") (a Final)
+					(tokenText isEquivalentTo "volatile") (a Volatile)
+					(tokenText isEquivalentTo "strictfp") (a StrictFP)
+					(tokenText isEquivalentTo "abstract") (an Abstract)
+
+					# Declarations
+					(tokenText isEquivalentTo "class") (a ClassKeyword)
+					(tokenText isEquivalentTo "interface") (an InterfaceKeyword)
+					(tokenText isEquivalentTo "enum") (an EnumKeyword)
+					(tokenText isEquivalentTo "extends") (an Extends)
+					(tokenText isEquivalentTo "implements") (an Implements)
+					(tokenText isEquivalentTo "throws") (a Throws)
+					(tokenText isEquivalentTo "package") (an PackageKeyword)
+					(tokenText isEquivalentTo "import") (an ImportKeyword)
+
+					# All other keywords!
+					true (a Identifier token=tokenText)
+				)
+			)
+		)	
+
+	fun Token integerOrFloatingPointLiteral []
+		(let [ 
+			refs Text tokenText = "" 
+			refs Char char = (this eat) 
+			refs Bool foundDot = false 
+			refs Literal newLiteral = nothing
+			]
+			(do
+				(while (((char is nothing) not) and ((char isEquivalentTo `.`) or (char isDigit)))
+					(do
+						(if (char isEquivalentTo `.`) (@foundDot set true))
+						(@tokenText set (tokenText cat (char toText)))
+						(@char set (this eat))
+					)
+				)
+				(this puke char)
+				(if foundDot
+					(@newLiteral set (a FloatingPointLiteral))
+					(@newLiteral set (a IntegerLiteral))
+				)
+				(newLiteral.@token set tokenText)
+				(if (((newLiteral.token is tokenText) not) and
+						((newLiteral.token isEquivalentTo tokenText) not))
+					nothing
+					newLiteral
+				)
+				
+			)
+		)
+
+	fun Token stringLiteral []
+		(let [ refs StringLiteral newStringLiteral = (a StringLiteral) refs Text tokenText = "" refs Char char = (this eat) ]
+			(do
+				(@tokenText set (tokenText cat (char toText)))
+				(@char set (this eat))
+				(while (((char is nothing) not) and ((char isEquivalentTo `"`) not)) # Stupid syntax highlighting requires this -> "
+					(do
+						(@tokenText set (tokenText cat (char toText)))
+						(@char set (this eat))
+					)
+				)
+				(if (((tokenText endsWith "\"") not) or (tokenText isEquivalentTo "\"")) 
+					(@tokenText set (tokenText cat "\"")))
+				(newStringLiteral.@token set tokenText)
+				(if (((newStringLiteral.token is tokenText) not) and
+						((newStringLiteral.token isEquivalentTo tokenText) not))
+					nothing
+					newStringLiteral
+				)
+			)
+		)
+
+	fun Token characterLiteral []
+		(let [ refs CharacterLiteral newCharLiteral = (a CharacterLiteral) refs Text tokenText = "" refs Char char = (this eat) ]
+			(do
+				(@tokenText set (tokenText cat (char toText)))
+				(@char set (this eat))
+				(while (((char is nothing) not) and ((char isEquivalentTo `'`) not))
+					(do
+						(@tokenText set (tokenText cat (char toText)))
+						(@char set (this eat))
+					)
+				)
+				(if (((tokenText endsWith "'") not) or (tokenText isEquivalentTo "'")) (@tokenText set (tokenText cat "'")))
+				(newCharLiteral.@token set tokenText)
+				(if (((newCharLiteral.token is tokenText) not) and
+						((newCharLiteral.token isEquivalentTo tokenText) not))
+					nothing
+					newCharLiteral
+				)
+			)
+		)
+
+.
+
+############################################################################
+# The base classes for most types of Java tokens. Some tokens extend expressions, types, etc.
+############################################################################
+a JavaToken is a Token that
+
+.
+
+######################
+# Comments
+######################
+
+a Comment is an JavaToken that
+
+	has undoable Text text = ""
+.
+
+an Exclusion is an Element that
+
+	has undoable Element code = nothing
+
+.
+
+############################################################################
+# Identifiers
+############################################################################
+
+# Used in all references to names. Similar semantics to a Identifier
+a Identifier is a Name that
+
+	has static constant Int DECLARATION = 1
+	has static constant Int TYPE = 2
+	has static constant Int METHOD = 3
+	has static constant Int VARIABLE = 4
+	has static constant Int PACKAGE = 5
+
+	has undoable Text token = ""
+		# May not have spaces
+		for which ((token contains ` `) not)
+		# Must be a series of letters, digits, and underscores
+		for which (token matches "[a-zA-Z_][a-zA-Z_0-9]*") otherwise token
+		# Primitive type keywords
+		for which ((token matches "true|false|void|boolean|char|byte|short|null|int|long|float|double") not) otherwise token
+		# Reserved words. We allow them to be typed, so views can respond to spaces after them.
+		for which ((token matches "abstract|assert|break|case|catch|class|const|continue|default|do|else|enum|extends|final|finally|for|goto|if|implements|import|instanceof|interface|native|new|package|private|protected|public|return|static|strictfp|super|switch|synchronized|this|throw|throws|transient|try|volatile|while") not) otherwise token
+
+	has undoable Text whitespace = "" for which (whitespace matches "[ ]*")
+
+	refs JavaElement binding <-
+		(cond
+			(identifierType is Identifier.DECLARATION) owner
+			(scope is nothing) nothing
+			(identifierType is Identifier.TYPE) (scope resolveType token)
+			(identifierType is Identifier.METHOD) (scope resolveMethod token)
+			(identifierType is Identifier.VARIABLE) (scope resolveVariable token)
+			(identifierType is Identifier.PACKAGE) (scope resolvePackage token)
+			true nothing
+		)
+
+	refs Int identifierType <-
+		(cond
+			((owner isa Method) or
+			 (owner isa TypeDeclaration)
+			 (owner isa VariableDeclarationFragment)
+			 (owner isa TypeParameter)
+			 (owner isa PackageDeclaration)
+			 (owner isa SingleVariableDeclaration)) Identifier.DECLARATION
+			(owner isa JType) Identifier.TYPE
+			(owner isa MethodInvocation) Identifier.METHOD
+			(owner isa Import) Identifier.PACKAGE
+			true Identifier.VARIABLE
+		)
+
+	fun Set<Structure> gatherBindings []
+		(cond
+			(scope is nothing) {}
+			(identifierType is Identifier.DECLARATION) {}
+			(identifierType is Identifier.TYPE) (scope gatherTypes {})
+			(identifierType is Identifier.METHOD) (scope gatherMethods {})
+			(identifierType is Identifier.VARIABLE) (scope gatherVariables {})
+			(identifierType is Identifier.PACKAGE) (scope gatherPackages {})
+			true {}
+		)
+
+	fun Text toText [] token
+	fun Bool isEquivalentTo [has Element e] ((e isa Identifier) and (name isEquivalentTo e.name))
+
+	refs Set tokensExpectedAfter = {}
+	fun Nothing addExpected [ refs Type t ] (tokensExpectedAfter add t)
+	fun Set<Structure> whitespaceCompletions [] tokensExpectedAfter
+	fun Set<Structure> tokenCompletions [] (this gatherBindings)
+
+	fun static Bool isTerminal [] true
+	fun static Bool isMutable [] true
+	fun Token directionTokenIn [ refs Bool direction ] this
+
+.
+
+
+############################################################################
+# Java Keywords
+############################################################################
+
+a Keyword is an abstract JavaToken that
+
+	has Text token = ""
+	has undoable Text whitespace = " " for which (whitespace matches "[ ]+")
+
+	fun static Bool isMutable [] false
+
+.
+
+a NewKeyword is a Keyword that
+
+	has undoable Text token = "new" for which (token isEquivalentTo "new") 
+.
+
+a Modifier is an abstract Keyword that
+
+	has undoable Text token = ""
+		for which (token matches "[a-z]*")
+		for which (token matches "abstract|final|native|private|protected|public|static|strictfp|synchronized|transient|volatile") otherwise token
+.
+
+a Abstract is a Modifier that
+	has undoable Text token = "abstract" for which (token isEquivalentTo "abstract")
+.
+
+a Final is a Modifier that
+	has undoable Text token = "final" for which (token isEquivalentTo "final")
+.
+
+a Native is a Modifier that
+	has undoable Text token = "native" for which (token isEquivalentTo "native")
+.
+
+a Private is a Modifier that
+	has undoable Text token = "private" for which (token isEquivalentTo "private")
+.
+
+a Protected is a Modifier that
+	has undoable Text token = "protected" for which (token matches "protected")
+.
+
+a Public is a Modifier that
+	has undoable Text token = "public" for which (token matches "public")
+.
+
+a Static is a Modifier that
+	has undoable Text token = "static" for which (token matches "static")
+.
+
+a StrictFP is a Modifier that
+	has undoable Text token = "strictfp" for which (token matches "strictfp")
+.
+
+a Synchronized is a Modifier that
+	has undoable Text token = "synchronized" for which (token matches "synchronized")
+.
+
+a Transient is a Modifier that
+	has undoable Text token = "transient" for which (token matches "transient")
+.
+
+a Volatile is a Modifier that
+	has undoable Text token = "volatile" for which (token matches "volatile")
+.
+
+a This is a Expression that
+
+	has Text token = "this" for which (token matches "this")
+
+.
+
+a Super is a Expression that
+
+	has Text token = "super" for which (token matches "super")
+
+.
+
+############################################################################
+# Statement keywords
+############################################################################
+
+a StatementKeyword is an abstract Keyword that
+
+	has static Text keywords = "break|case|catch|continue|do|else|final|finally|for|if|return|switch|synchronized|throw|try|while"
+	has undoable Text token = "" for which (token matches StatementKeyword.keywords)
+
+	fun Bool isStatementKeyword [ has Text keyword ] (keyword matches keywords)
+
+.
+
+an IfKeyword is a StatementKeyword that
+	has Text token = "if" for which (token matches "if")
+.
+
+an WhileKeyword is a StatementKeyword that
+	has Text token = "while" for which (token matches "while")
+.
+
+an ElseKeyword is a StatementKeyword that
+	has Text token = "else" for which (token matches "else")
+.
+
+an ForKeyword is a StatementKeyword that
+	has Text token = "for" for which (token matches "for")
+.
+
+an DoKeyword is a StatementKeyword that
+	has Text token = "do" for which (token matches "do")
+.
+
+an ContinueKeyword is a StatementKeyword that
+	has Text token = "continue" for which (token matches "continue")
+.
+
+an BreakKeyword is a StatementKeyword that
+	has Text token = "break" for which (token matches "break")
+.
+
+an ReturnKeyword is a StatementKeyword that
+	has Text token = "return" for which (token matches "return")
+.
+
+an TryKeyword is a StatementKeyword that
+	has Text token = "try" for which (token matches "try")
+.
+
+an SwitchKeyword is a StatementKeyword that
+	has Text token = "switch" for which (token matches "switch")
+.
+
+an AssertKeyword is a StatementKeyword that
+	has Text token = "assert" for which (token matches "assert")
+.
+
+
+############################################################################
+# Primitive types
+############################################################################
+
+a Primitive is a abstract JType that
+
+	has undoable Text token = ""
+	has undoable Text whitespace = " " for which (whitespace matches "\\s+")
+
+	fun static Bool isMutable [] false
+	fun static Bool isTerminal [] true
+	fun Token directionTokenIn [ refs Bool direction ] this
+	fun Text toText [] token
+
+	refs Set tokensExpectedAfter = {}
+	fun Nothing addExpected [ refs Type t ] (tokensExpectedAfter add t)
+	fun Set<Structure> whitespaceCompletions [] tokensExpectedAfter
+	fun Set<Structure> tokenCompletions [] { Byte Short Character Integer Long Float Double Boolean }
+
+.
+
+a Byte is a Primitive that
+	has constant Text token = "byte" for which (token matches "byte")
+.
+
+a Short is a Primitive that
+	has undoable Text token = "short" for which (token matches "short")
+.
+
+a Character is a Primitive that
+	has undoable Text token = "char" for which (token matches "char")
+.
+
+an Integer is a Primitive that
+	has undoable Text token = "int" for which (token matches "int")
+.
+
+a Long is a Primitive that
+	has undoable Text token = "long" for which (token matches "long")
+.
+
+a Float is a Primitive that
+	has undoable Text token = "float" for which (token matches "float")
+.
+
+a Double is a Primitive that
+	has undoable Text token = "double" for which (token matches "double")
+.
+
+a Boolean is a Primitive that
+	has undoable Text token = "boolean" for which (token matches "boolean")
+.
+
+a Void is a Primitive that
+	has undoable Text token = "void" for which (token matches "void")
+.
+
+############################################################################
+# Keywords used in Declarations
+############################################################################
+
+an ClassKeyword is a Keyword that
+	has undoable Text token = "class" for which (token matches "class")
+.
+
+an InterfaceKeyword is a Keyword that
+	has undoable Text token = "interface" for which (token matches "interface")
+.
+
+an EnumKeyword is a Keyword that
+	has undoable Text token = "enum" for which (token matches "enum")
+.
+
+an Throws is a Keyword that
+	has undoable Text token = "throws" for which (token matches "throws")
+.
+
+
+an Extends is a Keyword that
+
+	has undoable Text token = "extends"  for which (token matches "extends")
+.
+
+an Implements is a Keyword that
+
+	has undoable Text token = "implements"  for which (token matches "implements")
+.
+
+an ImportKeyword is a Keyword that
+
+	has undoable Text token = "import"  for which (token matches "import")
+.
+
+an PackageKeyword is a Keyword that
+
+	has undoable Text token = "package"  for which (token matches "package")
+.
+
+############################################################################
+# Literal Tokens
+############################################################################
+
+a Literal is an abstract Expression that
+
+	has undoable Text whitespace = "" for which (whitespace matches "\s*")
+
+	fun Nothing unparse [ refs List tokens ] (tokens append this)
+	fun Text toText [] token
+	fun static Bool isTerminal [] true
+	fun Token directionTokenIn [ refs Bool direction ] this
+
+	refs Set tokensExpectedAfter = {}
+	fun Nothing addExpected [ refs Type t ] (tokensExpectedAfter add t)
+	fun Set<Structure> whitespaceCompletions [] tokensExpectedAfter
+	fun Set<Structure> tokenCompletions [] {}
+
+.
+
+a IntegerLiteral is an Literal that
+
+	has undoable Text token = "0" for which (token matches "[0-9]+")
+.
+
+a FloatingPointLiteral is an Literal that
+
+	has undoable Text token = "0.0" for which (token matches "[0-9]+\.[0-9]*")
+.
+a CharacterLiteral is an Literal that
+
+	has undoable Text token = "" 
+		for which (token matches "'.*'") 
+		for which (token matches "'.'") otherwise token
+
+.
+
+a StringLiteral is an Literal that
+
+	has undoable Text token = "" for which (token matches "\".*\"")
+.
+
+a BooleanLiteral is an Literal that
+
+	has undoable Text token = "true" for which (token matches "true|false")
+.
+
+a NullLiteral is an Literal that
+
+	has constant Text token = "null" for which (token matches "null")
+.
+
+
+
+a Delimiter is an JavaToken that
+
+	has undoable Text token = ""
+	
+.
+
+
+############################################################################
+# These delimiters are objects so that they all have identity and we can find and refer to them
+# when refactoring expressions.
+############################################################################
+
+a Dot is a Delimiter that
+
+	has constant Text token = "." for which (token matches "\.")
+	has undoable Text whitespace = "" for which (whitespace matches "")
+.
+
+a LeftParenthesis is a Delimiter that
+
+	has constant Text token = "(" for which (token matches "\(")
+	has undoable Text whitespace = "" for which (whitespace matches "\s*")
+.
+
+a RightParenthesis is a Delimiter that
+
+	has constant Text token = ")" for which (token matches "\)")
+	has undoable Text whitespace = "" for which (whitespace matches "\s*")
+.
+
+a LeftBracket is a Delimiter that
+
+	has constant Text token = "[" for which (token matches "\[")
+	has undoable Text whitespace = "" for which (whitespace matches "\s*")
+.
+
+a RightBracket is a Delimiter that
+
+	has constant Text token = "]" for which (token matches "\]")
+	has undoable Text whitespace = "" for which (whitespace matches "\s*")
+.
+
+a Brace is a Delimiter that.
+
+a LeftBrace is a Brace that
+
+	has constant Text token = "{" for which (token matches "\{")
+	has undoable Text whitespace = "\n" for which (whitespace matches "\s*")
+.
+
+a RightBrace is a Brace that
+
+	has constant Text token = "}" for which (token matches "\}")
+	has undoable Text whitespace = "" for which (whitespace matches "\s*")
+.
+
+a SemiColon is a Delimiter that
+
+	has constant Text token = ";" for which (token matches ";")
+	has undoable Text whitespace = "" for which (whitespace matches "\n*")
+.
+
+a Comma is a Delimiter that
+
+	has constant Text token = "," for which (token matches ",")
+	has undoable Text whitespace = "" for which (whitespace matches "\s*")
+.
+
+
+######################
+# Operators!
+######################
+
+an Operator is an JavaToken that
+
+	has undoable Text token = ""
+	has undoable Text whitespace = " " for which (whitespace matches "\s*")
+
+.
+
+an AssignmentOperator is an Operator that
+	has undoable Text token = "" for which (token matches "=|\+=|-=|\*=|/=|&=|\|=|^=|%=|<<=|>>=|>>>=") otherwise token
+.
+
+an Equals is an AssignmentOperator that
+	has undoable Text token = "=" for which (token matches "=")
+.
+
+an PlusEquals is an AssignmentOperator that
+	has undoable Text token = "+=" for which (token matches "+=")
+.
+
+an MinusEquals is an AssignmentOperator that
+	has undoable Text token = "-=" for which (token matches "-=")
+.
+
+a LogicalOROperator is an Operator that
+	has undoable Text token = "||" for which (token matches "\|\|")
+.
+
+a LogicalANDOperator is an Operator that
+	has undoable Text token = "&&" for which (token matches "&&")
+.
+
+a BitwiseOROperator is an Operator that
+	has undoable Text token = "|" for which (token matches "\|")
+.
+
+a BitwiseANDOperator is an Operator that
+	has undoable Text token = "&" for which (token matches "&")
+.
+
+a BitwiseXOROperator is an Operator that
+	has undoable Text token = "" for which (token matches "^")
+.
+
+an EqualityOperator is an Operator that
+	has undoable Text token = "==" for which (token matches "==|!=")
+.
+
+an EqualsEqualsOperator is an EqualityOperator that
+	has undoable Text token = "==" for which (token matches "==")
+.
+
+an NotEqual is an Equality that
+	has undoable Text token = "!=" for which (token matches "!=")
+.
+
+an InequalityOperator is an Operator that
+	has undoable Text token = ">" for which (token matches ">|<|<=|>=")
+.
+
+an GreaterThan is an InequalityOperator that
+	has undoable Text token = ">" for which (token matches ">")
+.
+
+an LessThanOperator is an InequalityOperator that
+	has undoable Text token = "<" for which (token matches "<")
+.
+
+an GreaterThanOrEqualTo is an InequalityOperator that
+	has undoable Text token = ">=" for which (token matches ">=")
+.
+
+an LessThanOrEqualTo is an InequalityOperator that
+	has undoable Text token = "<=" for which (token matches "<=")
+.
+
+an BitshiftOperator is an Operator that
+	has undoable Text token = "<<" for which (token matches "<<|>>|>>>")
+.
+
+an AdditiveOperator is an Operator that
+	has undoable Text token = "-" for which (token matches "-|\+")
+.
+
+an PlusOperator is an AdditiveOperator that
+	has undoable Text token = "+" for which (token matches "\+")
+.
+
+an MinusOperator is an AdditiveOperator that
+	has undoable Text token = "-" for which (token matches "-")
+.
+
+an MultiplicativeOperator is an Operator that
+	has undoable Text token = "*" for which (token matches "\*|/|%")
+.
+
+an TimesOperator is an MultiplicativeOperator that
+	has undoable Text token = "*" for which (token matches "\*")
+.
+
+an DivideOperator is an MultiplicativeOperator that
+	has undoable Text token = "/" for which (token matches "/")
+.
+
+an ModulusOperator is an MultiplicativeOperator that
+	has undoable Text token = "%" for which (token matches "%")
+.
+
+an IncDecOperator is an abstract Operator that
+	has undoable Text token = "++" for which (token matches "\+\+|--")
+.
+
+an IncrementOperator is an IncDecOperator that
+	has undoable Text token = "++" for which (token matches "\+\+")
+.
+
+an DecrementOperator is an IncDecOperator that
+	has undoable Text token = "--" for which (token matches "--")
+.
+
+a NegationOperator is an Operator that
+	has undoable Text token = "!" for which (token matches "\!")
+.
+
+a LeadingWhitespace is a JavaToken that
+
+	has Text token = "" for which (token matches "")
+	has Text whitespace = "" for which (whitespace matches "\s*")
+
+.
+

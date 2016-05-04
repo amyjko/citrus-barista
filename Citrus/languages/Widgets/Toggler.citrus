@@ -1,0 +1,60 @@
+language Widgets
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+
+a Toggler is an ElementView that
+
+	refs Property property = ?
+	
+	refs View trueView = (a Label text="true")
+	refs View falseView = (a Label text="false")
+
+	has Real hPad = 3.0
+	has Real vPad = 3.0
+
+	has Real width <- (if (property get) ((children first) paddedWidth) ((children last) paddedWidth))
+	has Real height <- (if (property get) ((children first) paddedHeight) ((children last) paddedHeight))
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a Keyboard.Typed character=` `) action=
+			'(do (property set ((property get) not) (a Uniform duration=150.0)) true))
+		(a Behavior event=(a MouseButton.Pressed) action=
+			'(do ((this mouse).cursor pick this) true)) 
+		(a Behavior event=(a MouseButton.Released) action=
+			'(if ((this mouse).cursor.viewPicked is this)
+				(do
+					((this mouse).cursor release)
+					(property set ((property get) not) (a Uniform duration=150.0))
+					true
+				)
+				false
+			))
+	]
+
+	has List<View> children = [ (a True) (a False) ]
+
+#	fun updatedViewFor
+#	public ElementView updatedViewFor(Property p, Element newValue, Transition t) { return this; }
+
+	a False is a View that 
+
+		has Bool hidden <- (property get)
+		has Real width <- (this widestChildsWidth)
+		has Real height <- (this tallestChildsHeight)
+		has List<View> children = [ falseView ]
+	
+	.
+
+	a True is a View that
+	
+		has Bool hidden <- ((property get) not)
+		has Real width <- (this widestChildsWidth)
+		has Real height <- (this tallestChildsHeight)
+		has List<View> children = [ trueView ]
+	
+	.
+	
+.

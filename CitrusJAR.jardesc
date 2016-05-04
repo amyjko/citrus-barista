@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jardesc>
+<jar path="/Users/ajko/Workspace/Citrus/Citrus.jar"/>
+<options buildIfNeeded="true" compress="false" descriptionLocation="/Citrus/CitrusJAR.jardesc" exportErrors="true" exportWarnings="true" includeDirectoryEntries="false" overwrite="true" saveDescription="true" storeRefactorings="false" useSourceFolders="false"/>
+<refactoring structuralOnly="false"/>
+<selectedProjects>
+<project name="Citrus"/>
+</selectedProjects>
+<manifest generateManifest="true" mainClassHandleIdentifier="=Citrus/&lt;{Citrus.java[Citrus" manifestLocation="" manifestVersion="1.0" reuseManifest="false" saveManifest="false" usesManifest="true">
+<sealing sealJar="false">
+<packagesToSeal/>
+<packagesToUnSeal/>
+</sealing>
+</manifest>
+<selectedElements exportClassFiles="true" exportJavaFiles="true" exportOutputFolder="false">
+<javaElement handleIdentifier="=Citrus/&lt;edu.cmu.hcii.citrus.views"/>
+<javaElement handleIdentifier="=Citrus/&lt;edu.cmu.hcii.citrus.views.shapes"/>
+<javaElement handleIdentifier="=Citrus/&lt;edu.cmu.hcii.citrus.views.devices"/>
+<javaElement handleIdentifier="=Citrus/&lt;edu.cmu.hcii.citrus.views.paints"/>
+<javaElement handleIdentifier="=Citrus/&lt;edu.cmu.hcii.citrus.views.behaviors"/>
+<javaElement handleIdentifier="=Citrus/&lt;"/>
+<javaElement handleIdentifier="=Citrus/&lt;edu.cmu.hcii.citrus.views.layouts"/>
+<javaElement handleIdentifier="=Citrus/&lt;edu.cmu.hcii.citrus.views.transitions"/>
+<javaElement handleIdentifier="=Citrus/&lt;edu.cmu.hcii.citrus.vieweditor"/>
+<javaElement handleIdentifier="=Citrus/&lt;edu.cmu.hcii.citrus.views.widgets"/>
+<javaElement handleIdentifier="=Citrus/&lt;edu.cmu.hcii.citrus"/>
+</selectedElements>
+</jardesc>

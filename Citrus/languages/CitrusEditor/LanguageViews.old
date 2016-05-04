@@ -1,0 +1,887 @@
+language CitrusEditor
+
+# We import citrus since we're making views
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+uses "Widgets"
+
+init
+(do
+	(CitrusEditor extractViews)
+	((an EditorWindow language=
+		(a Language units=[
+			(a Unit
+				types=[(a Type name="" properties=[(a Dec valueExpression=(a Ref))])]
+			)
+		])) show)
+)
+
+an EditorWindow is an App that
+
+	has Language language = ?
+	has Real width = 640.0
+	has Real height = 480.0
+	
+	has List<View> children = [ (@language toView) ]
+
+.
+
+a LanguageView is an ElementView that
+
+	has Language model = ?
+
+	has Layout layout = (a VerticalLayout)
+	has Real width <- (this parentsRemainingWidth)
+	has Real height <- (this parentsHeight)
+	
+	has List<Behavior> behaviors = [
+		(a Navigable)
+#		(a Behavior event=(a Keyboard.Pressed key="down" action
+	]
+
+	has List<View> children = [
+		(a Header)
+		((model.units first) toView)
+	]
+
+	a Header is a View that
+
+		has Layout layout = (a HorizontalLayout spacing=5.0)
+		has Real width <- (this parentsWidth)
+		has Real height <- (this tallestChildsHeight)
+		has Bool clipsChildren = false
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+		
+		has List<Paint> background = [ (a FilledRectanglePaint primaryColor=(this getStyle).lightColor) ]
+
+		has List<View> children = [
+			(a Label text="language")
+			(a TextField property=model.@name font = (this getStyle).boldFont)
+			(a View width <- '((this parentsRemainingWidth) minus 25.0) height = 25.0)
+			(a Maker typeToMake=Type label=(a Label text="New Class" font=(this getStyle).boldFont) background=[(a FilledRectanglePaint primaryColor=(this getStyle).lighterColor secondaryColor=(a Color r=255.0 g=255.0 b=255.0))])
+			(a Duplicator 
+				elementToDuplicate=
+					(a Dec 
+						valueExpression=(a Ref) 
+						typeExpression=(a TypeExpression name=""))
+					label=(a Label text="New Property" 
+					font=(this getStyle).boldFont) 
+					background=[ 
+						(a FilledRectanglePaint 
+							primaryColor=(this getStyle).lighterColor 
+							secondaryColor=(a Color r=255.0 g=255.0 b=255.0))
+					]
+			)
+			(a Button 
+				label=(a Label text="Save") 
+				action='(parent.model writeXMLTo (parent.model.name cat ".xml")))
+		]
+		
+	.
+
+.
+
+a UnitView is an ElementView that
+
+	has Unit model = ?
+	has Layout layout = (a VerticalLayout)
+	has Real width <- (this parentsWidth)
+	has Real height <- (this parentsHeight)
+	
+	has List<View> children = [
+		(a ScrollView viewToScroll=(model.@types toView))
+	]
+
+	has List<Behavior> behaviors = [
+		(a Navigable)
+	]
+
+.
+
+an ExpressionView is an ElementView that
+
+	has Bool focusable = false
+	has Layout layout = (a HorizontalLayout spacing=1.0)
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Bool clipsChildren = false
+	
+	has List<Behavior> behaviors = [ (a Draggable) ]
+	
+.
+
+an ArgListView is a ListView that
+
+	has List<Arg> model = ?
+	has Layout layout = (a VerticalLayout spacing=2.0)
+	has Real width <- (if (model isEmpty) 4.0 (this rightmostChildsRight))
+	has Real height <- (if (model isEmpty) 16.0 (this lastChildsBottom))
+	has Bool vertical = false
+	has List<Behavior> behaviors = (super append
+		(a Behavior event=(a Keyboard.Typed) action='(this insertNewRefAndHaveItHandle))
+	)
+	
+	fun Nothing insertNewRefAndHaveItHandle [] nothing
+
+.
+
+an ArgView is an ExpressionView that
+
+	has Arg model = ?
+	has List<View> children = [(a Keyword) (model.@value toView)]
+
+	has List<Behavior> behaviors = [
+		(a Navigable)
+	]
+#		new Behavior(new Keyboard.Typed('='), new Action() { public boolean evaluate(View t) {
+#
+#			Arg arg = t.get(model);
+#			Ref newRef = new Ref("");
+#			arg.set(Arg.param, arg.get(Arg.value).get(Ref.token));
+#			arg.set(Arg.value, newRef);
+#			t.getWindow().focusOn(newRef, "next");
+#			return true;
+#		
+#		}})
+
+	a KeywordView is a View that
+	
+		has Real scale <- (if (model.param isEmpty) 0.0 1.0)
+		has Bool hidden <- (model.param isEmpty)
+		has Layout layout = (a HorizontalLayout)
+
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		
+		has List<View> children = [
+			(a TextField property=model.@param font=(this getStyle).italicFont)
+			(a Toggler 
+				property=model.@valueIsConstraint 
+				trueView=(a Label text="<-") 
+				falseView=(a Label text="="))
+		]
+
+		has List<Behavior> behaviors = [ (a Navigable) ]
+
+		has Bool clipsChildren = false
+
+	.
+	
+.
+
+
+a TokenView is an abstract ExpressionView that
+
+	has FontFace font = (this getStyle).boldFont
+	has Color color = (a Color r=0.0 g=0.0 b=0.0)
+	has List<View> children = [
+		(a TextField 
+			property=model.@token
+			font=font
+			color=color
+			children=[(a Label
+							transparency<-'(if (parent is nothing) 0.0 (if ((parent.text length) isEquivalentTo 0) 0.35 0.0))
+							font=(this getStyle).plainFont
+							text=((model getPropertyOwner) name)
+						)]
+		)
+	]
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a Keyboard.Typed) action='
+			(do "dfdf" true)
+			
+#			char c = App.keyboard.getLastCharacterTyped().value;
+#			int index = ((TokenView)env).get(children).firstItemOfType(Reflection.getJavaType(TextField.class)).get(TextField.caretIndex).value;
+#
+#			String text = env.get(model).get(Ref.token).value;
+#
+#			// We don't handle backspaces at the first character. We send this to the parent.
+#			String modifiedText = "";
+#			if(c == '\b') {
+#				if(index == 0) return new Bool(false);
+#				else modifiedText = text.substring(0, index - 1) + text.substring(index);
+#			}
+#			else modifiedText = text.substring(0, index) + c + text.substring(index);
+#			
+#			// We don't handle whatspace, since they delimit tokens
+#			// We don't handle other reserved characters:
+#			// [^\\s\\[\\]\\(\\)\"\\.@=<`']*
+#			if(Character.isWhitespace(c) || c == '=')
+#				return new Bool(false);
+#			
+#			// Split the string in half based on the character rejected
+#			String left = text.substring(0, index);
+#			String right = text.substring(index);
+#			
+#			if(modifiedText.equals("")) {
+#				
+#				Ref r = new Ref("");
+#				((ElementView)env).replaceAndFocusOn(r, new Text("token"));
+#				return new Bool(true);				
+#				
+#			}
+#			else if(c == CitrusParser.LIST_LEFT) {
+#
+#				Ref newRef = new Ref(right);
+#				((ElementView)env).replaceAndFocusOnValue(new NewList(newRef), newRef);
+#				return new Bool(true);
+#
+#			}
+#			else if(c == CitrusParser.FUNCTION_LEFT) {
+#				
+#				Ref newRef = new Ref(right);
+#				Evaluate newEval = new Evaluate(newRef, new Ref(""));
+#				((ElementView)env).replaceAndFocusOn(newEval, Evaluate.functionContext.getName());
+#				return new Bool(true);
+#				
+#			}
+#			else if(c == CitrusParser.STRING_LEFT) {
+#				
+#				TextLiteral newText = new TextLiteral(right);
+#				((ElementView)env).replaceAndFocusOn(newText, TextLiteral.token.getName());
+#				return new Bool(true);
+#				
+#			}
+#			else if(c == CitrusParser.PROPERTY) {
+#				
+#				PropertyRef newPropertyRef = new PropertyRef(right);
+#				((ElementView)env).replaceAndFocusOn(newPropertyRef, PropertyRef.name.getName());
+#				return new Bool(true);
+#				
+#			}
+#			else if(modifiedText.equals("true") || modifiedText.equals("false")) {
+#
+#				BoolLiteral newBool = new BoolLiteral(modifiedText);
+#				((ElementView)env).replaceAndFocusOn(newBool, BoolLiteral.token.getName());
+#				return new Bool(true);
+#				
+#			}
+#			else if(text.equals("") && Character.isDigit(modifiedText.charAt(0))) {
+#				
+#				IntLiteral newInt = new IntLiteral(modifiedText);
+#				((ElementView)env).replaceAndFocusOn(newInt, IntLiteral.token.getName());
+#				return new Bool(true);
+#				
+#			}
+#			else if(c == CitrusParser.CHARACTER) {
+#				
+#				CharLiteral newChar = new CharLiteral("");
+#				((ElementView)env).replaceAndFocusOn(newChar, CharLiteral.token.getName());
+#				return new Bool(true);
+#				
+#			}
+#			else if(c == CitrusParser.NAMESPACE) {
+#				
+#				if(env.get(model) instanceof IntLiteral) {
+#					RealLiteral newReal = new RealLiteral(modifiedText);
+#					((ElementView)env).replaceAndFocusOn(newReal, RealLiteral.token.getName());
+#					return new Bool(true);
+#				}
+#				else {
+#					
+#					Ref l = new Ref(left);
+#					Ref r = new Ref(right);
+#					((ElementView)env).replaceAndFocusOnValue(new Possessive(l, r), r);
+#					return new Bool(true);
+#
+#				}
+#				
+#			}
+#			else if(c == CitrusParser.QUOTE) {
+#
+#				env.get(model).emancipate();
+#				Quote newQuote = new Quote(env.get(model));
+#				((ElementView)env).replaceAndFocusOnValue(newQuote, env.get(model));
+#				return new Bool(true);
+#				
+#			}
+#			else {
+#				
+#				Ref newRef = new Ref(modifiedText);
+#				((ElementView)env).replaceAndFocusOn(newRef, Ref.token.getName());
+#				return new Bool(true);
+#				
+#			}
+		)
+	]
+
+.
+
+a DecListView is a ListView that
+
+	has List<Dec> model = ?
+	has Layout layout = (a VerticalLayout alignment="left-aligned" indentation=20.0)
+	has Real width <- (if (model isEmpty) 150.0 (this rightmostChildsRight))
+	has Real height <- (if (model isEmpty) 50.0 (this lastChildsBottom))
+	has Real hPad = 3.0
+	has Real vPad = 3.0
+	
+	has List<Behavior> behaviors = ([
+		(an Insertable)
+		(a Behavior event=(a Keyboard.Typed character=`\n`) action=
+			'(do 
+				(this insertAndFocusOn 
+					(a Dec typeExpression=(a TypeExpression name="") valueExpression=(a Ref)))
+				true
+			)
+		)
+	] appendList super)
+
+.
+
+an ExpressionListView is a ListView that
+
+	has List<Expression> model = ?
+	has Layout layout = (a HorizontalLayout)
+	has Real width <- (if (model isEmpty) 150.0 (this lastChildsRight))
+	has Real height <- (if (model isEmpty) 50.0 (this tallestChildsHeight))
+	has Real hPad = 3.0
+	has Real vPad = 3.0
+	
+.	
+	
+
+a DecView is an ElementView that
+
+	has Dec model = ?
+	has Bool clipsChildren = false
+	has Layout layout = (a VerticalLayout spacing=2.0)
+	has Real width <- (this widestChildsWidth)
+	has Real height <- (this lastChildsBottom)
+	
+	has List<Behavior> behaviors = [
+		(a Navigable)
+		(a Draggable)
+		(a Behavior event=(an App.ChildReceivedFocus) action=
+			'((children nth 2).@scale set 1.0 (a Uniform duration=100.0)))
+#		(a Behavior event=(an App.ChildLostFocus) action=
+#			'(if (model.valueRestrictions.items isEmpty) ((children nth 2).@scale set 0.0 (a Uniform duration=100.0)) true))
+	]
+	
+	has List<View> children = [
+		(a Header) (a Restrictions)
+	]
+	
+	# Unicode arrow <= is 21D0
+	a Header is a View that
+
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		
+		has Layout layout = (a HorizontalLayout spacing=2.0)
+		has Bool clipsChildren = false
+		
+		has List<Behavior> behaviors = [(a Navigable)]
+		has List<View> children = [
+			(a TypeExpressionView model=model.typeExpression)
+			(a TextField property=model.@name font=(this getStyle).boldFont)
+			(a Toggler 
+				left<-
+					'(if ((this getPreviousSibling) is nothing) 
+						0.0 
+						(90.0 max ((this getPreviousSibling).right plus 5.0))) 
+				property=model.@functionIsConstraint 
+				trueView=(a Label text="<-")
+				falseView=(a Label text="="))
+			(model.@valueExpression toView)
+		]
+
+	.
+	
+	a Restrictions is a View that
+	
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		
+		has Bool clipsChildren = false
+		has Layout layout = (a HorizontalLayout spacing=5.0)
+
+#		has Real scale <- (if (model.valueRestrictions.items isEmpty) 0.0 1.0)
+		has List<Behavior> behaviors = [(a Navigable)]
+		has List<View> children = [
+			(a View width=20.0 height=1.0)
+			(a Label text="restricted to")
+#			(model.@valueRestrictions toView)
+		]
+
+	.
+	
+.
+
+
+an EvaluateView is an ExpressionView that
+
+	has Evaluate model = ?
+	has Layout layout = (a HorizontalLayout alignment="left-aligned" spacing=2.0)
+	has List<View> children = [
+		(a GrowingParen isLeftParen=true)
+		(model.@functionContext toView)
+		(a Body)
+		(model.@arguments toView)
+		(a GrowingParen isLeftParen=false)
+	]
+
+	has List<Behavior> behaviors = [
+		(a Navigable)
+		(a Draggable)
+	]
+
+	a GrowingParen is a View that
+
+		has Real width <-
+			(if (parent is nothing)
+				5.0
+				(if ((parent.children nth 4) is nothing)
+					5.0
+					((parent.children nth 4).height times 0.2)))
+
+		has Real height <-
+			(if (parent is nothing)
+				5.0
+				(if ((parent.children nth 4) is nothing)
+					10.0
+					(parent.children nth 4).height))
+
+		has Bool isLeftParen = true
+		has List<Paint> background =
+		[
+			(if isLeftParen
+				(a CubicCurvePaint
+				stroke=1.5
+				start=(a Point x=1.0 y=0.0)
+				control1=(a Point x=0.0 y=0.33)
+				control2=(a Point x=0.0 y=0.66)
+				end=(a Point x=1.0 y=1.0))
+
+				(a CubicCurvePaint
+				stroke=1.5
+				start=(a Point x=0.0 y=0.0)
+				control1=(a Point x=1.0 y=0.33)
+				control2=(a Point x=1.0 y=0.66)
+				end=(a Point x=0.0 y=1.0))
+			)
+		]
+
+	.
+
+	a Body is a View that
+
+		has Layout layout = (a HorizontalLayout spacing=2.0)
+		
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		has Bool clipsChildren = false
+		
+		has Bool hidden <- (model isSpecialForm)
+		has Real scale <- (if hidden 0.0 1.0)
+		
+		has List<View> children = [ (model.@function toView) ]
+		
+	.
+
+.
+
+a NewListView is an ElementView that
+
+	has NewList model = ?
+	has Layout layout = (a HorizontalLayout spacing=4.0)
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	
+	has List<View> children = [
+		(a View 
+			width=5.0 
+			height<-
+				'(if ((this getNextSibling) is nothing) 
+					10.0 
+					((this getNextSibling).height plus 2.0)) 
+			background=[(a LinePathPaint stroke = 2.0 points=[(a Point x=1.0 y=0.0) (a Point x=0.0 y=0.0) (a Point x=0.0 y=1.0) (a Point x=1.0 y=1.0)])])
+		(model.@items toView)
+		(a View 
+			width=5.0 
+			height<-
+				'(if ((this getPreviousSibling) is nothing) 
+					10.0 
+					((this getPreviousSibling).height plus 2.0)) 
+			background=[(a LinePathPaint stroke = 2.0 points=[(a Point x=0.0 y=0.0) (a Point x=1.0 y=0.0) (a Point x=1.0 y=1.0) (a Point x=0.0 y=1.0)])])
+	]
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a Keyboard.Typed) action='(this insertNewRefAndHaveItHandle))
+	]
+
+	fun Nothing insertNewRefAndHaveItHandle []
+		nothing
+		
+#		Int index = null;
+		
+#		Ref newRef = new Ref();
+#		((ListView)get(children).nth(new Int(2))).insertAndFocusOn(new Int(0), new Arg("", false, newRef));
+#		newRef.getFirstView().reactTo(new Keyboard.Typed());
+		
+#		return new Bool(true);
+		
+#	}
+
+.
+
+a ParameterView is an ExpressionView that
+
+	has Parameter model = ?
+	
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	
+	has List<View> children = [
+		(a Label text="?" font=(this getStyle).italicFont)
+	]
+		
+.
+
+a PossessiveView is an ExpressionView that
+
+	has Possessive model = ?
+	has List<View> children = [
+		(model.@possessor toView)
+		(a Label text=".")
+		(model.@possession toView)
+	]
+
+	has Layout layout = (a HorizontalLayout)
+	has List<Behavior> behaviors = [
+		(a Navigable)
+		(a Behavior event=(a Keyboard.Typed character=`.`) action=
+			true
+#			if(App.keyboard.getLastCharacterTyped().value == '.') {
+#//				Possessive pos = t.get(model);
+#//				BaseElement newPos = ((BaseElement)StructuredEdits.replaceWithNewAndFocus(Possessive.class, pos));
+#//				newPos.set(Possessive.possessor, pos);
+#//				t.getWindow().focusOn(newPos.get(Possessive.possession), "next");
+#				return true;				
+#			} return false;
+		)
+	]
+
+.
+
+a PropertyRefView is an ExpressionView that
+
+	has PropertyRef model = ?
+	has List<View> children = [
+		(a Label text="@")
+		(a TextField property=model.@name)
+	]
+
+.
+
+a QuoteView is an ExpressionView that
+
+	has Quote model = ?
+	has Layout layout = (a HorizontalLayout alignment="left-justified" spacing=1.0)
+	has List<View> children = [(a Label text="'") (model.@value toView)]
+
+.
+
+a RefView is a TokenView that
+
+	has Ref model = ?
+	
+.
+
+a RuleView is an ExpressionView that
+
+	has Rule model = ?
+
+	has Layout layout = (a HorizontalLayout spacing=5.0)
+
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Real hPad = 3
+	has Real vPad = 3
+
+	has List<View> children = [
+		(a Label text="restricted to")
+		(model.@condition toView)	
+	]
+
+.
+
+a TypeArgumentListView is a ListView that
+
+	has List<BaseTypeExpression> model = ?
+
+	has Real width <- (if (model isEmpty) 16.0 (this rightmostChildsRight))
+	has Real height <- (if (model isEmpty) 16.0 (this tallestChildsHeight))
+	
+	has Layout layout = (a HorizontalLayout spacing=3.0)
+	has Bool vertical = false
+
+#	public static final Dec<List<Behavior>> behaviors = new Dec<List<Behavior>>(
+#		"(super append " +
+#		"(a Behavior event=(a Keyboard.Typed) action='(this insertNewRefAndHaveItHandle))" +
+#		")"
+#	);
+	
+#	public Bool insertNewRefAndHaveItHandle() {
+#		
+#		Int index = null;
+#		
+#		BaseTypeExpression newType = new BaseTypeExpression();
+#		insertAndFocusOn(new Int(0), newType);
+#		newType.getFirstView().getDeepestFocusableAncestor(true).requestKeyboardFocus("next");
+#		
+#		return new Bool(true);
+#		
+#	}
+
+.
+
+a TypeExpressionView is an ElementView that
+
+	has BaseTypeExpression model = ?
+
+	has Layout layout = (a HorizontalLayout)
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Bool clipsChildren = false
+
+	has List<View> children = [
+		(a TextField property=model.@name font=(this getStyle).italicFont)
+		(an Arguments)
+	]
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(an App.ChildReceivedFocus) action=
+			'((children nth 2).@scale set 1.0 (a Uniform duration=100.0)))
+		(a Behavior event=(an App.ChildLostFocus) action=
+			'(if (model.arguments isEmpty) ((children nth 2).@scale set 0.0 (a Uniform duration=100.0)) true))
+		(a Draggable)
+		(a Navigable)
+	]	
+
+	an Arguments is a View that
+
+		has Layout layout = (a HorizontalLayout)
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		has Bool clipsChildren = false
+		has Real scale <- (if (model.arguments isEmpty) 0.0 1.0)
+		has List<View> children = [
+			(a Label text="<")
+			(model.@arguments toView)
+			(a Label text=">")
+		]
+
+	.
+	
+.
+
+a TypeListView is a ListView that
+
+	has List<Type> model = ?
+	
+	has Real width <- (if (model isEmpty) (this parentsWidth) (this rightmostChildsRight))
+	has Real height <- (if (model isEmpty) (this parentsHeight) (this lastChildsBottom))
+	has Bool clipsChildren = false
+	
+	has List<Behavior> behaviors = ([
+		(an Insertable)
+		(a Behavior event=(a Keyboard.Typed character=`\n`) action='(do (this insertAndFocusOn (a Type)) true))
+	] appendList super)
+	
+.
+
+a TypeView is an ElementView that
+
+	has Type model = ?
+	has Real vPad = 5.0
+	has Layout layout = (a HorizontalLayout alignment="top-aligned" spacing=5.0)
+	has Bool collapse = false
+#	has Bool clipsChildren = false
+
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	
+	has List<Behavior> behaviors = [
+		(a Draggable)
+#		(a Behavior event=(a Keyboard.Pressed key="down"))
+		(a Navigable)
+		(a Behavior event=(an App.ChildReceivedFocus) action=
+			'((children nth 3).@scale set 1.0 (a Uniform duration=100.0)))
+		(a Behavior event=(an App.ChildLostFocus) action=
+			'((children nth 3).@scale set 0.0 (a Uniform duration=100.0)))
+	]
+	
+	# Dash is \u2212
+	has List<View> children = [
+		(a Toggler property=@collapse trueView=(a Label text="+") falseView=(a Label text="-"))
+		(a Body)
+		(a Views)
+	]
+
+	a Body is a View that
+
+		has Real width <- 
+			(if collapse
+				((children first) paddedWidth)
+				(this widestChildsWidth))
+				
+		has Real height <-
+			(if collapse
+				((children first) paddedHeight)
+				(this lastChildsBottom))
+
+		has Layout layout = (a VerticalLayout)
+		has Bool clipsChildren = false
+
+		has List<View> children = [
+			(a Header)
+			(a Footer)
+		]
+
+		has List<Behavior> behaviors = [(a Navigable)]
+		
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+	.
+
+	a Header is a View that
+	
+		has Layout layout = (a HorizontalLayout)
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+
+		has Bool clipsChildren = false
+
+		has Text aOrAn <-
+			(cond
+				((model.name length) isEquivalentTo 0) "A"
+				((model.name charAt 0) isVowel) "An"
+				true "A"
+			)
+
+		has List<Behavior> behaviors = [ (a Navigable) ]
+		
+		has List<View> children = [
+			(a Label property=@aOrAn)
+			(a TextField property=model.@name font=(this getStyle).boldFont)
+			(a Label text="is a")
+			(model.@prototype toView)
+		]
+		
+	.
+
+	a Footer is a View that
+
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this lastChildsBottom)
+		has Layout layout = (a VerticalLayout)
+		has Bool clipsChildren = false
+		has Bool hidden <- collapse
+		
+		has List<Behavior> behaviors = [ (a Navigable) ]
+
+		has List<View> children = [
+			(model.@properties toView)
+#			(model.@rules toView)
+		]
+		
+	.
+
+	a Views is a View that
+
+		has Real width <- (this widestChildsWidth)
+		has Real height <- (this lastChildsBottom)
+		has Real scale = 0.0
+		has Layout layout = (a VerticalLayout spacing=2.0)
+		has Bool clipsChildren = false
+		has List<View> children = [
+			(a Button label=(a Label text="Element View") action='(parent showEditorFor parent.model))
+			(a Button label=(a Label text="Reference View") action='(parent showEditorFor parent.model))
+			(a Button label=(a Label text="Nothing View") action='(parent showEditorFor parent.model))
+		]
+	
+	.
+
+	fun Nothing showEditorFor [ refs Type type ]
+		(let [ refs Type newType refs Unit newUnit ]
+			(do
+
+				(@newType set (ElementView createSubType (type.name cat "View")))
+
+				(newType declareProperty ((ElementView getDeclarationOf "model") override (a TypeExpression name=type.name) nothing))
+				(newType declareProperty ((ElementView getDeclarationOf "children") override (ElementView getDeclarationOf "children").typeExpression (a NewList)))
+				(newType declareProperty ((ElementView getDeclarationOf "behaviors") override (ElementView getDeclarationOf "behaviors").typeExpression (a NewList)))
+				(newType declareProperty ((ElementView getDeclarationOf "layout") override (ElementView getDeclarationOf "layout").typeExpression (a NoLayout)))
+				(newType declareProperty ((ElementView getDeclarationOf "width") override (ElementView getDeclarationOf "width").typeExpression (a RealLiteral token="100.0")))
+				(newType declareProperty ((ElementView getDeclarationOf "height") override (ElementView getDeclarationOf "height").typeExpression (a RealLiteral token="100.0")))
+				(newType declareProperty ((ElementView getDeclarationOf "scale") override (ElementView getDeclarationOf "scale").typeExpression (a RealLiteral token="1.0")))
+
+				(@newUnit set 
+					(a Unit 
+						types=[ newType ] 
+						uses=[ 
+							"edu.cmu.hcii.citrus.views" 
+							"edu.cmu.hcii.citrus.views.widgets" 
+							"edu.cmu.hcii.citrus.views.layouts" 
+						]))
+				
+				(debug "Units are " (type ownerOfType Language).units)
+				((type ownerOfType Language) include newUnit)
+
+				((a ViewEditorWindow viewType=newType) show)
+
+			)
+		)
+
+
+.
+
+
+a BoolLiteralView is a TokenView that
+
+	has BoolLiteral model = ?
+	has FontFace font = (this getStyle).fixedWidthFont
+	has Color color = (a Color r=0.0 g=0.0 b=255.0)
+
+.
+
+a IntLiteralView is a TokenView that
+
+	has IntLiteral model = ?
+	has FontFace font = (this getStyle).fixedWidthFont
+	has Color color = (a Color r=0.0 g=0.0 b=255.0)
+
+.
+
+a RealLiteralView is a TokenView that
+
+	has RealLiteral model = ?
+	has FontFace font = (this getStyle).fixedWidthFont
+	has Color color = (a Color r=0.0 g=0.0 b=255.0)
+
+.
+
+
+a CharLiteralView is a TokenView that
+
+	has CharLiteral model = ?
+	has FontFace font = (this getStyle).fixedWidthFont
+	has Color color = (a Color r=200.0 g=0.0 b=255.0)
+
+.
+
+a TextLiteralView is a TokenView that
+
+	has TextLiteral model = ?
+	has FontFace font = (this getStyle).fixedWidthFont
+	has Color color = (a Color r=200.0 g=0.0 b=255.0)
+
+.

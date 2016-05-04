@@ -1,0 +1,109 @@
+language Widgets
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.transitions"
+
+a Palette is a View that
+
+	has Text name = ?
+
+	has Real width <- (this parentsWidth)
+	has Real height <- (if collapsed ((children first) paddedHeight) (this lastChildsBottom))
+	has Layout layout = (a VerticalLayout spacing=5.0)
+	
+	has Bool collapsed = false
+	
+	refs View contents = ?
+
+	has List<View> children = [ (a Header) contents ]
+	has Real vPad = 5.0
+	has Real hPad = 5.0
+	
+	a Header is a View that
+	
+		has Real width <- (this parentsWidth)
+		has Real height <- ((children last) paddedHeight)
+
+		has static FontFace headerFont = (a FontFace family="Arial" size=16.0)
+
+		has List<View> children = [
+			(a RightArrow)
+			(a DownArrow)
+			(a Label text=name font=Header.headerFont left=15.0) 
+		]
+		
+#		has List<Paint> background = [ 
+#			(a FilledRectanglePaint
+#				primaryColor=(this getStyle).lightJavaColor
+#				secondaryColor=(this getStyle).darkJavaColor
+#			)
+#		]
+
+		has List<Behavior> behaviors = [
+			(a Behavior event=(a MouseButton.Clicked) action=
+				'(@collapsed set (collapsed not) (a Uniform duration=200.0))
+			)
+		]
+		
+	.
+
+	a RightArrow is a View that
+	
+		has static List<Paint> rightArrow = [
+			(a PolygonPaint 
+				primaryColor=(a Color r=0.0 g=0.0 b=0.0) 
+				points=[(a Point x=0.0 y=0.0) (a Point x=0.0 y=1.0) (a Point x=1.0 y=0.5)]
+			)
+		]
+
+		has Real width = 10.0
+		has Real height = 10.0
+		has Real top <- (((this parentsHeight) minus height) divide 2.0)
+		has List<Paint> foreground = RightArrow.rightArrow
+		has Bool hidden <- (collapsed not)
+		
+	.
+
+	a DownArrow is a View that
+	
+		has static List<Paint> downArrow = [
+			(a PolygonPaint 
+				primaryColor=(a Color r=0.0 g=0.0 b=0.0) 
+				points=[(a Point x=0.0 y=0.0) (a Point x=1.0 y=0.0) (a Point x=0.5 y=1.0)]
+			)
+		]
+		
+		has Real width = 10.0
+		has Real height = 10.0
+		has Real top <- (((this parentsHeight) minus height) divide 2.0)
+		has List<Paint> foreground = DownArrow.downArrow
+		has Bool hidden <- collapsed
+		
+	.
+	
+.
+
+a PaletteList is a View that
+	
+	has Real width <-
+		(do
+			refs Real widestContentWidth = 0.0 
+			(children foreach
+				(fun [ refs Palette palette ]
+					(@widestContentWidth set
+						(widestContentWidth max
+							(palette.contents paddedWidth)
+							((palette.children first) lastChildsRight)))))
+			widestContentWidth
+		)
+							
+	has Real height <- (this parentsHeight)
+	has Layout layout = (a VerticalLayout)
+	has Bool clipsChildren = false
+		
+.
+	

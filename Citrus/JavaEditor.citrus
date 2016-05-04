@@ -1,0 +1,152 @@
+language JavaEditor
+
+uses "Barista"
+uses "Java"
+uses "JavaViews"
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+
+init 
+(do
+
+	(JavaViews extractViews)
+	(Barista extractViews)
+
+	(TokensToStructure.@debug set false)
+
+	(ZeroOrMore.@debug set TokensToStructure.debug)
+	(Sequence.@debug set TokensToStructure.debug)
+	(OneOrMore.@debug set TokensToStructure.debug)
+	(Choice.@debug set TokensToStructure.debug)
+	(NonTerminal.@debug set TokensToStructure.debug)
+	(Optional.@debug set TokensToStructure.debug)
+
+#	(TokensToStructure.@debug set true)
+
+	((a ProjectWindow) show)
+	
+)
+
+a ProjectWindow is an App that
+
+	has Real width = 640.0
+	has Real height = 640.0
+
+	has constant Style style = (a JavaStyle)
+
+	has constant Environment env = (an Environment 
+		projects={
+			(a Project name="MyProject" packages={ 
+				(a Package 
+					name="default"
+					files={ (a Document name="MyClass.java" unit=(a CompilationUnit package=(a PackageDeclaration))) }
+				)
+			})
+		}
+	)
+	
+	has List<View> children = [(@env toView)]
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a Window.ElementDropped) action=
+			(fun [ refs View view refs Event event ]
+				(do
+					(debug "Handling " (event.element toText))
+					(if (event.element isa Project)
+						(env.projects add event.element))					
+					true
+				)
+			)
+		)
+		(a Behavior event=(a Keyboard.Pressed key="Z" meta=true) undoable=false action=
+			'(this undo)
+		)
+		(a Behavior event=(a Keyboard.Pressed key="F2") action=
+			'(TokensToStructure.@debug set (TokensToStructure.debug not)))
+		(a Behavior event=(a Keyboard.Pressed key="F3") action=
+			'(do
+				(debug "Touching width, which has outgoing " (@width outgoing))
+				(@width touch)
+				(debug "Touching height, which has outgoing " (@height outgoing))
+				(@height touch)
+				true
+			)
+		)
+		(a Behavior event=(a Keyboard.Pressed key="F1") action=
+			'(let [ 
+				refs List classesToParse = [
+#					(a TokenStream tokensToParse=[ ])
+#					(a TokenStream tokensToParse=[ (a Public) ])
+#					(a TokenStream tokensToParse=[ (a Public) (a ClassKeyword) ])
+#					(a TokenStream tokensToParse=[ (a Public) (a Final) (a ClassKeyword) (an Identifier token="foo") (a LeftBrace) (a RightBrace) ])
+#					(a TokenStream tokensToParse=[ (a Public) (a ClassKeyword) (an Identifier token="foo") (an Extends) (a LeftBrace) (a RightBrace) ])
+#					(a TokenStream tokensToParse=[ (a Public) (a ClassKeyword) (an Identifier token="foo") (an Extends) (a ReferenceType type=(an Identifier token="String")) (a LeftBrace) (a RightBrace) ])				
+#					(a TokenStream tokensToParse=[ (a Public) (a ClassKeyword) (an Identifier token="foo") (a ReferenceType type=(an Identifier token="String")) (a LeftBrace) ])				
+				]
+				refs List bodyDeclarationsToParse = [
+#					(a TokenStream tokensToParse=[ (a Public) (a ClassKeyword) (an Identifier token="foo") (a LeftBrace) (a RightBrace) ])
+#					(a TokenStream tokensToParse=[ (a Public) (a Short) (an Identifier token="foo") (an Equals) (a IntegerLiteral token="5") ])
+#					(a TokenStream tokensToParse=[ (a Protected) (a Public) (a Short) (an Identifier token="foo") (an Equals) (a IntegerLiteral token="5") (a SemiColon) ])
+#					(a TokenStream tokensToParse=[ (a Private) (a Final) (an Identifier token="String") (an Identifier token="foo") (a LeftParenthesis) (a IntegerLiteral token="5") (a SemiColon) ])
+#					(a TokenStream tokensToParse=[ (a Private) (a Final) (an Identifier token="String") (an Identifier token="foo") (a LeftParenthesis) (a RightParenthesis) (a LeftBrace) (a RightBrace)])
+#					(a TokenStream tokensToParse=[ (a Private) (a Final) (an Identifier token="String") (an Identifier token="foo") (a LeftParenthesis) (a RightParenthesis) (a LeftBrace) (a SemiColon) (a RightBrace)])
+#					(a TokenStream tokensToParse=[ 
+#						(an Identifier token="String") (an Identifier token="foo") (a LeftParenthesis) (a RightParenthesis) (a LeftBrace) 
+#							(an If) (a While) (a For) (a MethodInvocation) (a RightBrace)])
+				]
+				refs List structuresToUnparse = [
+					(a Class)
+					(a Class name=(an Identifier token="blah") supertype=(a ReferenceType type=(an Identifier token="String")) 
+						declarations=[(a Method) (a Field)])
+				]
+				refs List classesToComplete = [
+#					(a TokenStream tokensToParse=[ ])
+#					(a TokenStream tokensToParse=[ (a Public) ])
+#					(a TokenStream tokensToParse=[ (a Public) (a ClassKeyword) ])
+#					(a TokenStream tokensToParse=[ (a Public) (a Final) (a ClassKeyword) (an Identifier token="foo") (a RightBrace) ])
+				]
+			]
+				(do
+					(debug "Okay. I'm going to try to use the Class.grammar to parse something.")
+					(debug "Let's make some tokens")
+
+					(classesToParse foreach
+						(fun [ refs TokenStream list ]
+							(let [ has ParseAction action = 
+										(a TokensToStructure tokens=list grammar=TypeDeclaration.grammar) ]
+								(do
+									(debug "\nParsed " (list toText) " into\n" (action.structure toText))
+								))))
+
+					(bodyDeclarationsToParse foreach
+						(fun [ refs TokenStream list ]
+							(let [ has ParseAction action = 
+										(a TokensToStructure tokens=list grammar=BodyDeclaration.grammar) ]
+								(do
+									(debug "\nParsed " (list toText) " into\n" (action.structure toText))
+								))))
+
+					(structuresToUnparse foreach
+						(fun [ refs JavaElement el ]
+							(debug 
+								"\nUnparsed " el " into\n" 
+								(el unparse { el }))))
+
+					(classesToComplete foreach
+						(fun [ refs TokenStream list ]
+							(let [ has ParseAction action = 
+										(a TokensToStructure autocomplete=true tokens=list grammar=TypeDeclaration.grammar) ]
+								(do
+									(debug "\nAutocompleted " (list toText) " into\n" (action.structure toText))
+								))))
+					
+					true
+				)
+			)
+		)
+	]
+
+.

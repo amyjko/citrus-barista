@@ -1,0 +1,1868 @@
+language JavaViews
+
+uses "Java"
+uses "Barista"
+uses "Widgets"
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+# Used in auto-complete menus
+a BehaviorView is an ReferenceView that
+
+	has Behavior model = ?
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Layout layout = (this getStyle).spaceWidthSpaced
+
+	has List<View> children = [
+		(a Label left=0.0 text=model.description) 
+		(a Label 
+			left <- 
+				'(cond
+					(parent is nothing) 0.0 
+					(parent.parent is nothing) 0.0
+					true (parent.parent.width minus width)
+				)
+			font=(this getStyle).shortcutFont 
+			text=(model.event toText))
+	]
+.
+
+######################
+# Editor-Wide views
+######################
+
+a HorizontalCodeReferenceView is an ReferenceView that
+
+	has Layout layout = (this getStyle).spaceWidthSpaced
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Bool clipsChildren = false
+.
+
+a ImmutableKeywordView is a Label that
+
+	has FontFace font = (this getStyle).keywordFont
+	has List<Paint> content = [(a TextPaint layout=textLayout primaryColor=(this getStyle).keywordColor)]
+	has List<Paint> background = []
+	has Real hPad = 2.0
+	has Bool clipsChildren = false
+.
+
+a CommaDelimitedItem is a BaselinedHeader that
+
+	refs View view = ?
+	refs Property item = ?
+	has List<View> children = [
+		view 
+		(a CommaView)
+	]
+
+	a CommaView is a BaselinedHeader that
+		has Comma mod = (a Comma)
+		has List<View> children = [(@mod toView)]
+		has Bool hidden <- (((item owner) last) is (item get))
+		has Real scale <- (if hidden 0.0 1.0)
+	.
+.
+
+# Used by if, while, for, else, 
+a StatementBodyView is a BaselinedHeader that
+
+	has Real left <- 
+		(cond
+			((this getPreviousSibling) is nothing) 0.0 
+			((children first).model isa Block) 0.0
+			(width greaterThan 100.0) (this getStyle).indentation
+			true ((this getPreviousSibling).right plus 3.0)
+		)
+
+	has Real top <-
+		(cond
+			((this getPreviousSibling) is nothing) 0.0 
+			(((children first).model isa Block) or (width greaterThan 100.0)) ((this getPreviousSibling).bottom plus 3.0)
+			true 0.0
+		)
+		
+.
+
+
+
+######################
+# Big Declaration Views
+######################
+
+an EnvironmentView is an ElementView that
+
+	has Environment model = ?
+	
+	has Real width <- (this parentsWidth)
+	has Real height <- (this parentsHeight)
+
+	refs TabbedView tabs = (a TabbedView height<-'(this parentsHeight))
+	refs Constructs toolbar = (a Constructs)
+	has Layout layout = (a HorizontalLayout)
+
+	has List<View> children = [
+		(a PaletteList 
+			children=[
+				(a Palette name="Projects" contents=(an Projects))
+				(a Palette name="Java" contents=(an Constructs))
+				(a Palette name="Options" contents=(an Options))
+			]
+			background = [
+				(a FilledRectanglePaint 
+					primaryColor=(this getStyle).lightJavaColor
+					secondaryColor=(this getStyle).darkJavaColor
+				)
+			]
+		)
+		(an EditorView)
+	]
+
+	an Options is a View that
+
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this lastChildsBottom)
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+		has Bool clipsChildren = false
+		has Layout layout = (a VerticalLayout spacing=3.0)
+	
+		has List<View> children = [ 
+			(a LabeledCheckbox property=TokensToStructure.@debug label="Debug parsing")
+			(a LabeledCheckbox property=IdentifierView.@showBindingErrors label="Show binding errors")
+		]
+		
+		a LabeledCheckbox is a View that
+
+			has Property property = ?
+			has Text label = ?
+			
+			has List<View> children = [ (a Checkbox property=property) (a Label text=label clipsChildren=false) ]
+			has Real width <- (this lastChildsRight)
+			has Real height <- (this tallestChildsHeight)
+			has Layout layout = (a HorizontalLayout spacing=3.0)
+			has Bool clipsChildren = false
+		
+		.
+		
+	.
+
+	a Projects is a View that
+	
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this lastChildsBottom)
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+		has Layout layout = (a VerticalLayout spacing=5.0)
+		has Bool clipsChildren = false
+		
+		has List<View> children = [
+			(model.@projects toView)
+		]		
+	
+	.
+
+	a Constructs is a View that
+	
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this lastChildsBottom)
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+		has Layout layout = (a VerticalLayout spacing=5.0)
+
+		has List<View> children = [
+			(a Duplicator elementToDuplicate=(a Import))
+			(a Duplicator elementToDuplicate=(a Class modifiers=(a Modifiers modifiers=[(a Public)])))
+			(a Duplicator elementToDuplicate=(a Method))
+			(a Duplicator elementToDuplicate=(a Field fragments=[(a VariableDeclarationFragment)]))
+			(a Duplicator elementToDuplicate=(a Local fragments=[(a VariableDeclarationFragment)]))
+			(a Duplicator elementToDuplicate=(a If))
+			(a Duplicator elementToDuplicate=(a For))
+			(a Duplicator elementToDuplicate=(a While))			
+			(a Duplicator elementToDuplicate=(a Block statements=[(an EmptyStatement)]))
+			(a Duplicator elementToDuplicate=(a Return))
+			(a Duplicator elementToDuplicate=(a MethodInvocation))
+			(a Duplicator elementToDuplicate=(a Addition))
+		]
+
+	.
+	
+	an EditorView is a View that
+
+		has Real width <- (this parentsRemainingWidth)
+		has Real height <- (this parentsHeight)
+		has Layout layout = (a VerticalLayout)
+	
+		has List<View> children = [
+			tabs
+		]
+	
+	.
+
+.
+
+a ProjectView is an ElementView that
+
+	has Project model = ?
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this lastChildsBottom)
+	has Layout layout = (a VerticalLayout spacing=0.0)
+	has Bool clipsChildren = false
+	has Real vPad = 5.0
+
+	has List<View> children = [
+		(a ProjectBaselinedHeader)
+		(model.@packages toView)
+	]
+
+	a ProjectBaselinedHeader is a BaselinedHeader that
+
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		has Layout layout = (a HorizontalLayout)
+
+		has List<View> children = [
+			(a TextField 
+				background=[] 
+				font=(a FontFace family="Arial" size=16.0) 
+				property=model.@name)
+			(a Button label=(a Label text="Save") action=
+				'(parent.model writeXMLTo (parent.model.name cat ".xml")))
+		]
+		
+		has List<Paint> background = [
+			(a LinePaint x1=0.0 y1=1.0 x2=1.0 y2=1.0 stroke=1.0 primaryColor=(a Color r=0.0 g=0.0 b=0.0))
+		]
+	.
+.
+
+a ProjectSetView is a SetView that
+
+	has Set<Project> model = ?
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this lastChildsBottom)
+	has Layout layout = (a VerticalLayout spacing=5.0)	
+	
+.
+
+a PackageView is an ElementView that
+
+	has Package model = ?
+	has Layout layout = (a VerticalLayout spacing=5.0)
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this lastChildsBottom)
+	has List<View> children = [
+		(a TreeView
+			label=(a TextField property=model.@name background=[] font=(this getStyle).identifierFont)
+			list=(model.@files toView)
+		)
+	]
+.
+
+a PackageRefView is a HorizontalCodeReferenceView that
+
+	has Package model = ?
+	has List<View> children = [
+		(a Label text=(model.token toText) font=(this getStyle).plainFont)
+	]
+.
+
+a PackageSetView is a SetView that
+
+	has Set<Package> model = ?
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this lastChildsBottom)
+	has Layout layout = (a VerticalLayout indentation=10.0 spacing=2.0)
+.
+
+a DocumentView is an ElementView that
+
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this lastChildsBottom)
+	has List<View> children = [
+		(model.@unit toView) 
+	]
+
+.
+
+a DocumentSetView is a SetView that
+
+	refs Set<Document> model = ?
+	has Layout layout = (a VerticalLayout indentation=10.0 spacing=2.0)
+	fun View viewFor [refs Property p] (a DocumentReferenceView property=p model=(p get))	
+
+.
+
+
+a DocumentReferenceView is a ReferenceView that
+
+	refs Document model = ?
+	has Layout layout = (a HorizontalLayout spacing=5.0)
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Bool clipsChildren = false
+	has List<View> children = [
+		(a FileIcon)
+		(a TextField 
+			background=[]
+			font=(this getStyle).identifierFont
+			property=model.@name
+		)
+	]
+
+	a FileIcon is a View that
+	
+		has Real width = 9.0
+		has Real height = 13.0
+		has Real vPad = 2.0
+		has Real hPad = 2.0
+		has Bool clipsChildren = false
+
+		has List<Paint> foreground = FileIcon.fileIcon
+		has static List<Paint> fileIcon = [
+			(a FilledRectanglePaint primaryColor=(a Color r=255.0 g=255.0 b=255.0))
+			(a RectanglePaint primaryColor=(a Color r=0.0 g=0.0 b=0.0))
+		]
+	
+	
+	.
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(a MouseButton.Clicked) action=
+			'(do
+				((this ownerOfType EnvironmentView).tabs show model)
+				true
+			)
+		)
+	]
+.
+
+
+a CompilationUnitView is an SelectableView that
+
+	has CompilationUnit model = ?
+
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this lastChildsBottom)
+	has Real hPad = 0.0
+	has Real vPad = 5.0
+	has Bool clipsChildren = false
+
+	has Layout layout = (a VerticalLayout indentation=10.0 spacing=0.0)
+
+	has List<View> children = [
+		(model.@whitespace toView)
+		(a PackageDeclarationHider)
+		(model.@imports toView)
+		(a Rule)
+		(model.@declarations toView)
+	]
+
+	has List<Behavior> behaviors = ([(a Navigable)] appendList super)
+
+	a PackageDeclarationHider is a View that
+	
+		has Bool hidden <- (model.package is nothing)
+		has Real scale <- (if hidden 0.0 1.0)
+		has Real width <- (this firstChildsRight)
+		has Real height <- (this firstChildsBottom)
+		
+		has List<View> children = [(model.@package toView)]
+
+	.
+
+	a Rule is a View that
+	
+		has Real width <- (if (parent is nothing) 0.0 ((parent parentsWidth) minus 10.0))
+		has Real height <- 2.0
+		has Bool hidden <- (model.declarations isEmpty)
+		has List<Paint> background = [
+			(a LinePaint primaryColor=(this getStyle).borderColor x1=0.0 y1=0.5 x2=1.0 y2=0.5)
+		]
+		
+	.
+
+.
+
+an UnparsableUnitView is an ElementView that
+
+	refs UnparsableUnit model = ?
+
+	has Real width <- (this firstChildsRight)
+	has Real height <- (this firstChildsBottom)
+	has Bool clipsChildren = false
+
+	has List<Paint> background = [ (this getStyle).syntaxErrorPaint ]
+	
+	has List<View> children = [ (model.@tokens toView) ]
+		
+.
+
+a TypeDeclarationListView is a ListView that
+
+	has List<TypeDeclaration> model = ?
+	has constant Layout layout = (a VerticalLayout spacing=10.0)
+	has Real width <- ((this rightmostChildsRight) max 200.0)
+	has Real height <- ((this lastChildsBottom) max 300.0)
+	has List<Behavior> behaviors = [(an Insertable)]
+	has Bool clipsChildren = false
+	has Bool focusable=false
+
+.
+
+a ModifiersView is a BaselinedElementView that
+
+	has Modifiers model = ?
+	has List<View> children = [(model.@modifiers toView)]
+	
+.
+
+a ModifierListView is a BaselinedListView that
+
+	has List<Modifier> model = ?
+	has Real width <- (if (model isEmpty) 1.0 (this lastChildsRight))
+	has Real height <- ((this tallestChildsHeight) max 10.0)
+	has Bool clipsChildren = false
+	has Bool focusable=false
+
+.
+
+a PackageDeclarationView is an ElementView that
+
+	has PackageDeclaration model = ?
+
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this bottommostChildsBottom)
+	has Bool clipsChildren = false
+
+	has List<View> children = [
+		(a Top)
+		(a WhitespaceBelowField property=model.semicolon.@whitespace)		
+	]
+
+	a Top is a BaselinedHeader that
+
+		has Bool clipsChildren = false
+		has List<View> children = [
+			(model.@keyword toView)
+			(model.@name toView)
+			(a TokenField 
+				color=(this getStyle).delimiterColor
+				property=model.semicolon.@token
+			)
+		]
+		
+	.	
+
+	fun Real getMaxChildAscent [] height
+
+	has List<Behavior> behaviors = [(a Draggable)]
+	
+.
+
+an ImportView is a BaselinedElementView that
+
+	has Import model = ?
+
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this bottommostChildsBottom)
+
+	has List<Behavior> behaviors = [(a Draggable)]
+
+	has List<View> children = [
+		(a Body)
+		(a WhitespaceBelowField property=model.semicolon.@whitespace)		
+	]
+
+	a Body is a BaselinedHeader that
+	
+		has Bool clipsChildren = false
+		has List<View> children = [
+			(model.@keyword toView)
+			(model.@name toView) 
+			(an OnDemandView)
+			(a TokenField 
+				color=(this getStyle).delimiterColor
+				property=model.semicolon.@token
+			)
+		]
+	
+	.
+
+	an OnDemandView is a View that
+
+		has Layout layout = (this getStyle).spaceWidthSpaced
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		has Bool clipsChildren = false
+		has Bool hidden <- (model.star is nothing)
+		has Real scale <- (if hidden 0.0 1.0)
+
+		has List<View> children = [(model.@dot toView) (model.@star toView)]
+	.
+
+.
+
+an ImportListView is an IndentedListView that
+
+	has List<Import> model = ?
+	has Layout layout = (a VerticalLayout indentation=0.0 spacing=2.0)
+	has Real width <- ((this rightmostChildsRight) max 200.0)
+	has Real height <- ((this lastChildsBottom) max 25.0)
+	has List<Behavior> behaviors = [(an Insertable)]
+	has Bool clipsChildren = false
+	has Bool focusable = false
+
+.
+
+a BodyDeclarationListView is an IndentedListView that
+
+	has List<BodyDeclaration> model = ?
+	has Bool focusable=false
+
+	has Real left = (this getStyle).indentation
+
+	has Bool clipsChildren = false
+	has Layout layout = (a VerticalLayout spacing=0.0)
+	has Real width <- ((this rightmostChildsRight) max 200.0)
+	has Real height <- ((this lastChildsBottom) max 25.0)
+
+	has List<Behavior> behaviors = ([
+		(a Navigable)
+		(an Insertable)
+	] appendList super)
+.
+
+an UnparsableBodyDeclarationView is an BaselinedElementView that
+
+	refs UnparsableBodyDeclaration model = ?
+
+	has Real width <- (this firstChildsRight)
+	has Real height <- (this firstChildsBottom)
+	has Bool clipsChildren = false
+
+	has List<Paint> background = [(this getStyle).syntaxErrorPaint]
+	has List<View> children = [ (model.@tokens toView) ]
+		
+.
+
+a TypeDeclarationReferenceView is a HorizontalCodeReferenceView that
+
+	has TypeDeclaration model = ?
+	has List<View> children = [
+		(a Label text=(model.token toText) font=(this getStyle).typeReferenceFont)
+	]
+.
+
+a BodyDeclarationsView is a ElementView that
+
+	has BodyDeclarations model = ?
+
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this bottommostChildsBottom)
+	has Layout layout = (a VerticalLayout)
+	has Bool clipsChildren = false
+
+	has Bool collapsed = false
+
+	has List<View> children = [
+		(a PairedDelimiterField property=model.left.@token)
+		(a WhitespaceBelowField left=(this getStyle).indentation property=model.left.@whitespace)
+		(model.@declarations toView) 
+		(a PairedDelimiterField property=model.right.@token)
+		(a WhitespaceBelowField property=model.right.@whitespace)		
+	]
+	has Real scale <- (if collapsed 0.25 1.0)
+
+	has List<Behavior> behaviors = [	
+		(a Behavior event=(a MouseButton.DoubleClicked) action=
+			'(@collapsed set (collapsed not) (a Uniform duration=250.0))
+		)
+		(a Navigable)
+	]
+	
+.
+
+a ClassView is an ElementView that
+
+	has Class model = ?
+
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this lastChildsBottom)
+	has Layout layout = (a VerticalLayout)
+	has Real hPad = 4.0
+	has Real vPad = 4.0
+	has Bool clipsChildren = false
+
+	has List<View> children = [
+		(a Top)
+		(a Declarations)
+	]
+
+	has List<Paint> background = [
+		(a FilledRectanglePaint primaryColor=(this getStyle).lighterJavaColor cornerWidth=10.0 cornerHeight=15.0)
+	]
+	
+	has List<Behavior> behaviors = [	
+		(a Navigable)
+		(a Draggable)
+	]
+
+	a Top is a BaselinedHeader that
+
+		has List<View> children = [
+			(model.@modifiers toView) 
+			(model.@keyword toView)
+			(model.@name toView)
+			(an ExtendsView)
+			(an ImplementsView)
+		]
+
+	.
+	
+	an ExtendsView is a BaselinedHeader that
+
+		has Bool hidden <- (model.supertype is nothing)
+		has Real scale <- (if hidden 0.0 1.0)
+		
+		has List<View> children = [
+			(model.@extends toView)
+			(model.@supertype toView)
+		]
+	.
+	
+	an ImplementsView is a BaselinedHeader that
+
+		has Real hidden <- ((model.interfaces is nothing) or (model.interfaces isEmpty))
+		has Real scale <- (if hidden 0.0 1.0)
+	
+		has List<View> children = [
+			(model.@implements toView)
+			(model.@interfaces toView)
+		]
+	.	
+
+	a Declarations is a View that
+
+		has Real width <- (this rightmostChildsRight)
+		has Real height <- (this lastChildsBottom)
+		has Bool clipsChildren = false
+		has List<View> children = [(model.@declarations toView)]
+		has List<Behavior> behaviors = [(a Navigable)]
+	.
+.
+
+an UnparsableTypeDeclarationView is an ElementView that
+
+	refs UnparsableTypeDeclaration model = ?
+
+	has Real width <- (this firstChildsRight)
+	has Real height <- (this firstChildsBottom)
+	has Bool clipsChildren = false
+
+	has List<Paint> background = [(this getStyle).syntaxErrorPaint]
+	
+	has List<View> children = [ (model.@tokens toView) ]
+		
+.
+
+a JavaElementListView is a BaselinedListView that
+
+	refs List<JavaElement> model = ?
+	has Layout layout = (a HorizontalLayout alignment="top-aligned")#(this getStyle).textFlowLayout
+	has List<Behavior> behaviors = [(a Navigable)]
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+.
+
+a FieldView is a BaselinedElementView that
+
+	has Field model = ?
+	has List<Behavior> behaviors = [(a Draggable)]
+	has List<View> children = [
+		(model.@modifiers toView) 
+		(model.@type toView) 
+		(model.@fragments toView)
+		(model.@semicolon toView)
+	]
+.
+
+
+a MethodView is an ElementView that
+
+	has Method model = ?
+
+	has Real width <- (if collapsed ((children first) lastChildsRight) (this rightmostChildsRight))
+	has Real height <- (if collapsed ((children first) tallestChildsHeight) (this lastChildsBottom))
+	has Bool collapsed = false
+	has Bool clipsChildren = false
+
+	has Layout layout = (a VerticalLayout)
+
+	has List<View> children = [
+		(a MetaDataView)
+		(a Top) 
+		(model.@body toView)
+	]
+
+	a MetaDataView is a View that
+	
+		has List<View> children = [ model.metadata ]
+		has Bool clipsChildren = true
+		has Bool hide = true
+		has Real hPad = 3.0
+		has Real vPad = 3.0
+		has Real width <- ((children first) paddedWidth)
+		has Real height <- (if hide 20.0 ((children first) paddedHeight))
+		has List<Behavior> behaviors = [
+			(a Behavior event=(a MouseButton.DoubleClicked) action=
+				'(do (@hide set (hide not) (a Uniform duration=200.0)) true)
+			)
+		]
+
+	has List<Paint> background = [
+		(a FilledRectanglePaint cornerWidth=10.0 cornerHeight=10.0 primaryColor = (a Color r=255.0 g=255.0 b=255.0))
+		(a RectanglePaint cornerWidth=10.0 cornerHeight=10.0 primaryColor = (a Color r=0.0 g=0.0 b=0.0))
+	]
+
+	.
+	
+	
+
+	has List<Behavior> behaviors = [(a Navigable) (a Draggable)]
+
+	a Top is a BaselinedHeader that
+
+		has List<View> children = [
+			(model.@modifiers toView) 
+			(a ReturnTypeView)
+			(model.@name toView) 
+			(model.@left toView)
+			(model.@formalParameters toView)
+			(model.@right toView)
+		]
+		
+	.
+
+	a ReturnTypeView is a BaselinedHeader that
+	
+		has List<View> children = [(model.@returnType toView)]
+		has Boolean hidden <- (model isConstructor)
+		has Real scale <- (if (model isConstructor) 0.0 1.0)	
+	.
+.
+
+
+######################
+# Variable declarations
+######################
+
+
+a VariableDeclarationReferenceView is a HorizontalCodeReferenceView that
+
+	has VariableDeclaration model = ?
+	has List<View> children = [
+		(a Label text=(model.name toText) font=(this getStyle).plainFont)
+		(a Label text=(model.type toText) font=(this getStyle).italicFont)
+	]
+.
+
+a SingleVariableDeclarationView is a BaselinedElementView that
+
+	has SingleVariableDeclaration model = ?
+	has List<View> children = [
+		(model.@type toView) 
+		(model.@name toView)
+	]
+
+.
+
+a SingleVariableDeclarationListView is a BaselinedListView that
+
+	has List<SingleVariableDeclaration> model = ?
+	has Layout layout = (this getStyle).spaceWidthSpaced
+	has Real width <- (if (model isEmpty) 2.0 (this lastChildsRight))
+	has Real height <- (if (model isEmpty) 10.0 (this tallestChildsHeight))
+	has Bool clipsChildren = false
+	has Bool focusable = false
+
+	fun View viewFor [refs Property p] (a CommaDelimitedItem view=(p toView) item=p)
+.
+
+a VariableDeclarationFragmentView is a BaselinedElementView that
+
+	has VariableDeclarationFragment model = ?
+
+	has List<View> children = [
+		(model.@name toView)
+		(an Initializer)
+	]
+
+	an Initializer is a BaselinedHeader that
+
+		has Layout layout = (this getStyle).spaceWidthSpaced
+		has Real width <- (if (model.initializer is nothing) 0.0 (this lastChildsRight))
+		has Real height <- (this tallestChildsHeight)
+		has Bool hidden <- (model.initializer is nothing)
+		has Bool clipsChildren = false
+		has List<View> children = [
+			(model.@equals toView)
+			(model.@initializer toView)
+		]
+	.
+.
+
+a VariableDeclarationFragmentListView is a BaselinedListView that
+
+	has List<VariableDeclarationFragment> model = ?
+	has Layout layout = (this getStyle).spaceWidthSpaced
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Bool clipsChildren = false
+	has Bool focusable = false
+
+	fun View viewFor [refs Property p] (a CommaDelimitedItem view=(p toView) item=p)	
+.
+
+a VariableDeclarationExpressionView is a BaselinedElementView that
+
+	has VariableDeclarationExpression model = ?
+	has List<View> children = [
+		#(model.@modifiers toView) 
+		(model.@type toView) 
+		(model.@fragments toView)
+	]
+.
+
+a LocalView is a StatementView that
+
+	has Local model = ?
+	has List<View> children = [
+		(model.@type toView) 
+		(model.@fragments toView)
+		(model.@semicolon toView)
+	]
+.
+
+
+######################
+# Exclusions
+######################
+
+an ExclusionView is a BaselinedElementView that
+
+	has Exclusion model = ?
+	has List<Paint> foreground = [(a FilledRectanglePaint primaryColor=(a Color r=200.0 g=200.0 b=200.0 alpha=128.0))]
+	has List<View> children = [
+		(model.@code toView)
+	]
+
+	has List<Behavior> behaviors = ([
+		(a Behavior event=(a Keyboard.Pressed key="/" meta=true) action=
+			'(this replaceWithChildAndFocusOn "code" "")
+		)
+	] appendList super)
+
+.
+
+######################
+# Literals
+######################
+
+a ClassLiteralView is a BaselinedElementView that
+
+	has ClassLiteral model = ?
+	has List<View> children = [(model.@type toView) (a ImmutableKeywordView text=".class")]
+.
+
+######################
+# Expressions
+######################
+
+
+an ExpressionView is a BaselinedElementView that
+
+	has Layout layout = (this getStyle).spaceWidthSpaced
+	has Bool pretty = true
+
+	has List<Behavior> behaviors = ([
+		(a Navigable)
+		(a Behavior event=(an App.ChildReceivedFocus) action=
+			'(do
+				(((model getExpressionRoot) getFirstView) prettyPrint false)
+				true
+			)
+		)
+		(a Behavior event=(an App.ChildLostFocus) action=
+			'(do
+				(((model getExpressionRoot) getFirstView) prettyPrint true)
+				true
+			)
+		)
+	] appendList super)
+
+	fun Bool parseAndReplace [ 
+		refs Expression root 
+		refs List tokens 
+		refs Text focusOnBeforeAfter 
+		refs Expression focusFrom 
+	]
+		(let [ refs Expression parsed ]
+			(do
+				(debug "Parsing " tokens)
+				(@parsed set (Expression parse tokens))
+				(debug "Parsed to " parsed "; tokens is " tokens)
+				((root getFirstView) replaceAndFocusOn parsed "")
+				(cond
+					(focusOnBeforeAfter isEquivalentTo "before")
+						(((focusFrom getFirstView) focusableSibling false) requestKeyboardFocus "previous")
+					(focusOnBeforeAfter isEquivalentTo "onLeft")
+						(((focusFrom getFirstView) thisOrFirstFocusableChild true) requestKeyboardFocus "next")
+					(focusOnBeforeAfter isEquivalentTo "onRight")
+						(((focusFrom getFirstView) thisOrFirstFocusableChild true) requestKeyboardFocus "previous")
+					(focusOnBeforeAfter isEquivalentTo "after")
+						(((focusFrom getFirstView) focusableSibling true) requestKeyboardFocus "next")
+					true nothing
+				)
+				((parsed is nothing) not)
+			)
+		)
+		
+	fun Bool prettyPrint [ refs Bool p ]
+		(do
+			(if ((pretty isEquivalentTo p) not)
+				(@pretty set p (a Uniform duration=250.0))
+				(this foreachAncestor
+					(fun [ refs View child ]
+						(if (child isa ExpressionView) (child.@pretty set p (a Uniform duration=250.0)))))
+			))
+		
+.
+
+an ExpressionWithAlternativesView is an ExpressionView that
+
+	has ExpressionWithAlternatives model = ?
+	
+	has Real width <- (this firstChildsRight)
+	has Real height <- (this firstChildsBottom)
+	has Bool clipsChildren = false
+	
+	has List<View> children = [(model.@alternative toView) (an Exclusions)]
+
+	has List<Behavior> behaviors = [
+		(a Behavior event=(an App.ChildReceivedFocus) action=
+			'(do
+				((children second).@hidden set false)
+				((children second).@hoisted set true)
+			)
+		)
+		(a Behavior event=(an App.ChildLostFocus) action=
+			'(do
+				((children second).@hidden set true)
+				((children second).@hoisted set false)
+			)
+		)
+				
+	]
+
+	an Exclusions is a BaselinedHeader that
+
+		has List<Paint> background = [
+			(a FilledRectanglePaint cornerWidth=25.0 cornerHeight=15.0 left=5.0 top=5.0 bottom=-5.0 right=-5.0 primaryColor=(a Color alpha=128.0 r=0.0 g=0.0 b=0.0))
+			(a PolygonPaint 
+				primaryColor=(a Color r=255.0 g=255.0 b=255.0) 
+				points=[(a Point x=0.0 y=0.8) (a Point x=0.2 y=1.0) (an OwnerPoint)])
+			(a PolygonPaint 
+				fill=false
+				primaryColor=(a Color r=0.0 g=0.0 b=0.0) 
+				points=[(a Point x=0.0 y=0.8) (a Point x=0.2 y=1.0) (an OwnerPoint)])
+			(a FilledRectanglePaint cornerWidth=25.0 cornerHeight=15.0 primaryColor=(a Color r=255.0 g=255.0 b=255.0))
+			(a RectanglePaint cornerWidth=25.0 cornerHeight=15.0 primaryColor=(a Color r=0.0 g=0.0 b=0.0))
+		]
+		
+		has List<Behavior> behaviors = [ (a Moveable) ]
+		
+		a OwnerPoint is a Point that
+			has Real x <- 
+				(0.0 minus 
+					((left minus (((enclosing getPreviousSibling) paddedWidth) divide 2.0)) 
+						divide (enclosing paddedWidth)))
+			has Real y <- 
+				(1.0 minus ((bottom minus (((enclosing getPreviousSibling) paddedWidth) divide 2.0)) 
+					divide (enclosing paddedHeight)))
+		.
+		
+		has Bool clipsChildren = false
+		has Bool hidden = true
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+		has Layout layout = (a VerticalLayout spacing=2.0)
+		has Real width <- ((children second) paddedWidth)
+		has Real height <- (this lastChildsBottom)
+		has Real left =
+			(let [ refs View sib = (this getPreviousSibling) ]
+				(if (sib is nothing) 
+					0.0
+					(sib.width plus 15.0)
+				)
+			)
+		has Real top = ((0.0 minus height) minus 15.0)
+					
+		has List<View> children = [(a Header) (model.@exclusions toView)]
+
+		a Header is a View that
+		
+			has Real width <- (if ((this getNextSibling) is nothing) 0.0 ((this getNextSibling) paddedWidth))
+			has Real height <- (this tallestChildsHeight)
+			has Real vPad = 3.0
+			has Layout layout = (a HorizontalLayout spacing=5.0)
+			has List<View> children = [(a CloseButton) (a Label text="Alternatives")]			
+			has List<Paint> background = [
+				(a FilledRectanglePaint primaryColor=(a Color r=225.0 g=225.0 b=225.0))
+				(an LinePaint primaryColor=(a Color r=200.0 g=200.0 b=200.0) x1=0.0 y1=1.0 x2=1.0 y2=1.0)
+			]
+		
+		.
+
+		a CloseButton is a View that
+
+			has List<Paint> background = [
+				(an EllipsePaint primaryColor=(a Color r=128.0 g=128.0 b=128.0))
+				(an LinePaint primaryColor=(a Color r=255.0 g=255.0 b=255.0) x1=0.25 y1=0.25 x2=.75 y2=.75)
+				(an LinePaint primaryColor=(a Color r=255.0 g=255.0 b=255.0) x1=0.25 y1=0.75 x2=.75 y2=.25)
+			]
+			has Real width = 14.0
+			has Real height = 14.0
+			has List<Behavior> behaviors = [
+				(a Behavior event=(a MousePointer.Entered)
+					action='(do (@transparency set 0.5) true))
+				(a Behavior event=(a MousePointer.Exited)
+					action='(do (@transparency set 1.0) true))
+#				(a Behavior event=(a MouseButton.Clicked)
+#					action='(do (this close document) true))
+			]
+		.
+
+	.
+	
+.
+
+an AlternativeView is an ElementView that
+
+	has Alternative model = ?
+	has Real width <- (this widestChildsWidth)
+	has Real height <- (this tallestChildsHeight)
+	has Layout layout = (a HorizontalLayout spacing=5.0)
+	has List<View> children = [ (model.@expr toView) ]
+	
+.
+
+an AlternativeListView is a ListView that
+
+	has List<Alternative> model = ?
+	has Bool focusable = false
+	has Real width <- (this widestChildsWidth)
+	has Real height <- (this lastChildsBottom)
+	has Layout layout = (a VerticalLayout spacing=5.0)
+	
+.
+
+a CastView is a ExpressionView that
+
+	has Cast model = ?
+	has List<View> children = [
+		(model.@left toView)
+		(model.@type toView) 
+		(model.@right toView)
+		(model.@expr toView)
+	]
+	
+.
+
+an InfixView is a ExpressionView that
+
+	has Infix model = ?
+
+	has List<View> children = [
+		(model.@left toView) 
+		(model.@operator toView)
+		(model.@right toView)		
+	]
+
+.
+
+
+a DivisionView is an InfixView that
+
+	has Division model = ?
+	has static constant Layout readable = (a VerticalLayout alignment="centered" spacing=3.0)
+	has static constant Layout editable = (a HorizontalLayout spacing=0.0)
+	has Real width <- (((children first) paddedWidth) max ((children second) paddedWidth))
+	has Real height <- (((children first) paddedHeight) max ((children second) paddedHeight))
+
+	has List<View> children = [
+		(a Readable)
+		(an Editable) 
+	]
+
+	a Readable is a View that
+
+		has Layout layout = DivisionView.readable
+		has Bool hidden <- (pretty not)
+		has Bool scale <- (if hidden 0.0 1.0)
+		has Real width <- (((children first) paddedWidth) max ((children second) paddedWidth))
+		has Real height <- (this lastChildsBottom)
+		has List<Paint> content = [
+			(a LinePaint x1=0.0 x2=1.0 y1=0.55 y2=0.55 stroke=1.0 primaryColor=(a Color r=0.0 g=0.0 b=0.0))
+		]
+		has List<View> children = [
+			(model.@left toView) 
+			(model.@right toView)		
+		]
+	
+	.
+
+	a Editable is a BaselinedHeader that
+
+		has Layout layout = DivisionView.editable
+		has Bool hidden <- pretty
+		has Bool scale <- (if hidden 0.0 1.0)
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		has List<View> children = [
+			(model.@left toView) 
+			(model.@operator toView)
+			(model.@right toView)		
+		]
+	.
+
+.
+
+a AdditionView is an ExpressionView that
+
+	has Addition model = ?
+
+	has List<View> children = [
+		(a Readable)
+		(an Editable) 
+	]
+
+	a Readable is a BaselinedHeader that
+
+		has Layout layout = (a HorizontalLayout spacing=0.0)
+		has Bool hidden <- (pretty not)
+		has Bool scale <- (if hidden 0.0 1.0)
+		has List<View> children = [
+			(model.@left toView)
+			(a Plus)
+			(model.@right toView)		
+		]
+		
+		a Plus is a BaselinedHeader that
+			has Real width=15.0
+			has Real height=15.0
+			has List<Paint> background = [
+				(a LinePaint x1=0.2 x2=0.8 y1=0.5 y2=0.5)
+				(a LinePaint x1=0.5 x2=0.5 y1=0.2 y2=0.8)
+			]
+		.
+	
+	.
+
+	a Editable is a BaselinedHeader that
+
+		has Layout layout = (a HorizontalLayout spacing=0.0)
+		has Bool hidden <- pretty
+		has Bool scale <- (if hidden 0.0 1.0)
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		has List<View> children = [
+			(model.@left toView) 
+			(model.@operator toView)
+			(model.@right toView)		
+		]
+	.
+
+.
+
+a LogicalORView is an ExpressionView that
+
+	has LogicalOR model = ?
+	has Layout layout = (this getStyle).spaceWidthSpaced
+	has static constant Layout readable = (a HorizontalLayout spacing=3.0)
+	has static constant Layout editable = (a HorizontalLayout spacing=0.0)
+	has Real width <- (((children first) paddedWidth) max ((children second) paddedWidth))
+
+	has Real height <- (((children first) paddedHeight) max ((children second) paddedHeight))
+
+	has static Layout bottomHorizontal = (a HorizontalLayout alignment="bottom-aligned" spacing=0.0)
+
+	has List<View> children = [
+		(a Readable)
+		(an Editable) 
+	]
+
+	a Readable is a BaselinedHeader that
+
+		has Layout layout = LogicalORView.readable
+		has Bool hidden <- (pretty not)
+		has Bool scale <- (if hidden 0.0 1.0)
+		has Real width <- (this lastChildsRight)
+		has Real height <- (this tallestChildsHeight)
+		has Real hPad = 2.0
+		has Real vPad = 2.0
+		has List<View> children = [
+			(model.@left toView) 
+			(model.@right toView)		
+		]
+	
+	.
+
+	a Editable is a BaselinedHeader that
+
+		has Bool hidden <- pretty
+		has Bool scale <- (if hidden 0.0 1.0)
+		has Layout layout = LogicalORView.bottomHorizontal
+#		has Real width <- (this lastChildsRight)
+#		has Real height <- (this tallestChildsHeight)
+		has List<View> children = [
+			(model.@left toView) 
+			(model.@operator toView)
+			(model.@right toView)		
+		]
+	.
+
+.
+
+a LogicalANDView is an ExpressionView that
+
+	has LogicalAND model = ?
+	has Layout layout = (this getStyle).spaceWidthSpaced
+	has static constant Layout readable = (a VerticalLayout spacing=3.0)
+	has static constant Layout editable = (a HorizontalLayout spacing=0.0)
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this tallestChildsHeight)
+
+	has List<View> children = [
+		(a Readable)
+		(an Editable) 
+	]
+
+	a Readable is a BaselinedHeader that
+
+		has Layout layout = LogicalANDView.readable
+		has Bool hidden <- (pretty not)
+		has Bool scale <- (if hidden 0.0 1.0)
+		has Real width <- (((children first) paddedWidth) max ((children last) paddedWidth))
+		has Real height <- (this lastChildsBottom)
+		has Real hPad = 5.0
+		has Real vPad = 5.0
+		has List<Paint> background = [
+			(a FilledRectanglePaint cornerWidth=10.0 cornerHeight=10.0 primaryColor=(a Color r=255.0 g=255.0 b=255.0))
+			(a RectanglePaint cornerWidth=10.0 cornerHeight=10.0 primaryColor=(a Color r=225.0 g=225.0 b=225.0))
+		]
+		has List<View> children = [
+			(model.@left toView)
+			(model.@right toView)
+		]
+	
+	.
+
+	a Editable is a BaselinedHeader that
+
+		has Bool hidden <- pretty
+		has Bool scale <- (if hidden 0.0 1.0)
+#		has Real width <- (this lastChildsRight)
+#		has Real height <- (this tallestChildsHeight)
+		has List<View> children = [
+			(model.@left toView) 
+			(model.@operator toView)
+			(model.@right toView)		
+		]
+	.
+
+.
+
+
+an ArrayInitializerView is a ExpressionView that
+
+	has ArrayInitializer model = ?
+	has List<View> children = [
+		(a DelimiterView text="{")
+		(model.@values toView)
+		(a DelimiterView text="}")
+	]
+.
+
+a FieldAccessView is a ExpressionView that
+
+	has FieldAccess model = ?
+	has Layout layout = (this getStyle).spaceWidthSpaced
+	has List<View> children = [
+		(model.@expr toView) 
+		(model.@dot toView)
+		(model.@name toView)
+	]
+
+.
+
+a ParenthesizedExpressionView is an ExpressionView that
+
+	has ParenthesizedExpression model = ?
+	has List<View> children = [
+		(model.@left toView)
+		(model.@expr toView)
+		(model.@right toView)
+	]
+
+.
+
+a NewView is a ExpressionView that
+
+	has New model = ?
+	has List<View> children = [
+		(model.@newKeyword toView)
+		(model.@type toView) 
+		(a DelimiterView text="(")
+		(model.@arguments toView)
+		(a DelimiterView text=")")
+	]
+	
+.
+
+a MethodInvocationView is an ExpressionView that
+
+	has MethodInvocation model = ?
+	has List<View> children = 
+		(if (customView is nothing) [(a StandardView)] [(a StandardView) (a customView)])
+
+	has Type customView <- (this chooseView)
+
+	fun Type chooseView [] 
+		(cond
+			(model.name.token isEquivalentTo "pow") PowerView
+			(model.name.token isEquivalentTo "sqrt") RootView
+			true nothing
+		)
+
+	a StandardView is a BaselinedHeader that
+
+		has Bool hidden <- (((customView is nothing) not) and pretty)
+		has Bool scale <- (if hidden 0.0 1.0)
+
+		has Layout layout = (this getStyle).spaceWidthSpaced
+
+		has List<View> children = [
+			(a QualifierView)
+			(model.@name toView)
+			(model.@left toView)
+			(model.@arguments toView)
+			(model.@right toView)
+		]
+
+		an QualifierView is a BaselinedHeader that
+	
+			has List<View> children = [ (model.@expr toView) (model.@dot toView) ]
+			has Bool hidden <- (model.expr is nothing)
+			has Bool scale <- (if (model.expr is nothing) 0.0 1.0)
+	
+		.
+	.
+	
+	a RootView is a BaselinedHeader that
+
+		has Bool hidden <- (pretty not)
+		has Bool scale <- (if hidden 0.0 1.0)
+		has List<View> children = [((model.arguments first) toView)]
+		has Real hPad = 4.0
+		
+		has static PaintPaint rootPaint = (a PaintPaint paint=[
+			(a LinePaint x1=0.0 y1=0.0 x2=1.0 y2=0.0 primaryColor=(a Color r=0.0 g=0.0 b=0.0))
+			(a LinePaint x1=0.0 y1=0.0 x2=0.0 y2=1.0 right=-4.0 primaryColor=(a Color r=0.0 g=0.0 b=0.0))
+			(a LinePaint x1=0.0 y1=1.0 left=-4.0 x2=0.0 y2=0.66 right=-6.0 primaryColor=(a Color r=0.0 g=0.0 b=0.0))
+			(a LinePaint x1=0.0 y1=0.66 left=-4.0 x2=0.0 y2=0.66 right=-8.0 primaryColor=(a Color r=0.0 g=0.0 b=0.0))
+			]
+		)
+		
+		has List<Paint> content = [ RootView.rootPaint ]
+		
+	.
+
+	a PowerView is a BaselinedHeader that
+
+		has Bool hidden <- (pretty not)
+		has Bool scale <- (if hidden 0.0 1.0)
+		has List<View> children = [(a BaseView) (an ExponentView)]
+
+		a BaseView is a BaselinedHeader that
+		
+			has LeftParenthesis l = (a LeftParenthesis)
+			has LeftParenthesis r = (a RightParenthesis)
+			has List<View> children = [ (@l toView) ((model.arguments first) toView) (@r toView) ]
+					
+		.
+
+		an ExponentView is a BaselinedHeader that
+
+			has Real top <- (0.0 minus (height divide 3.0))
+			has List<View> children = [((model.arguments second) toView)]
+		
+		.
+		
+	.
+	
+.
+
+an ExpressionListView is a BaselinedListView that
+
+	has List<Expression> model = ?
+	has Layout layout = (this getStyle).spaceWidthSpaced
+	has Real width <- (if (model isEmpty) 2.0 (this lastChildsRight))
+	has Real height <- (if (model isEmpty) 10.0 (this tallestChildsHeight))
+	has Bool clipsChildren = false
+	has Bool focusable = false
+
+	has List<Behavior> behaviors = ([
+		(a Behavior event=(a Keyboard.Typed) action=
+			'(if (model isEmpty)
+				(let [ 
+					refs List tokens = (JavaTokenizer tokenize (((view keyboard) getLastCharacterTyped) toText))
+					refs Element tokenToFocusOn = (tokens last)
+					refs Element structure = (Expression parse tokens)
+				]
+					(do
+						(if ((structure is nothing) not)
+							(this insertAndFocusOn caretIndex structure)
+							false
+						)
+					)
+				)
+				false
+			)
+		)
+	] appendList super)
+
+	fun View viewFor [refs Property p] (a CommaDelimitedItem view=(p toView) item=p)
+.
+
+a QualifiedNameView is a ExpressionView that
+
+	has QualifiedName model = ?
+	has List<View> children = [
+		(model.@qualifier toView)
+		(model.@dot toView)
+		(model.@name toView)
+	]
+
+.
+
+######################
+# Statements
+######################
+
+a StatementView is a BaselinedElementView that
+
+	has Statement model = ?
+	
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Bool clipsChildren = false
+
+	has List<Behavior> behaviors = ([
+		(a Navigable)
+		(a Draggable)
+		(a Behavior event=(a Keyboard.Pressed key="/" meta=true) action=
+			'(this parentWithAndFocusOn (an Exclusion) "code" "code")
+		)
+	] appendList super)
+
+.
+
+an EmptyStatementView is a StatementView that
+
+	has EmptyStatement model = ?
+	
+	has List<View> children = [(model.@semicolon toView)]
+		
+.
+
+a BlockView is an ElementView that
+
+	has Block model = ?
+	has Layout layout = (a VerticalLayout alignment="left-aligned")
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this bottommostChildsBottom)
+
+	has Bool collapsed = false
+	has Real scale <- (if collapsed 0.5 1.0)
+	has Bool clipsChildren = false
+
+	has List<View> children = [
+		(a PairedDelimiterField property=model.left.@token)
+		(a WhitespaceBelowField left=(this getStyle).indentation property=model.left.@whitespace)
+		(model.@statements toView)
+		(a PairedDelimiterField property=model.right.@token)
+		(a WhitespaceBelowField property=model.right.@whitespace)		
+	]
+
+	has List<Behavior> behaviors = ([
+		(a Navigable)
+		(a Draggable)
+		# Convert to various keyword structures
+		(a Behavior 
+			event=(a Keyboard.Typed character=`\b`)
+			action='(if (model.statements isEmpty) (this replaceAndFocusOn (an EmptyStatement) "") false)
+		)
+		(a Behavior event=(a MouseButton.DoubleClicked) action=
+			'(@collapsed set (collapsed not) (a Uniform duration=200.0))
+		)
+	] appendList super)
+
+.
+
+a StatementListView is an ListView that
+
+	has List<Statement> model = ?
+
+	has Bool focusable = false
+	has Real left <- (this getStyle).indentation
+	has Layout layout = (a VerticalLayout)
+
+	has List<Behavior> behaviors = ([
+		(an Insertable)
+		(a Behavior event=(a Keyboard.Pressed key="up" meta=true) action=
+			'(model swapItemAtWithOverTime (model indexOf (this childWithFocus).model) false (a Uniform))
+		)
+		(a Behavior event=(a Keyboard.Pressed key="down" meta=true) action=
+			'(model swapItemAtWithOverTime (model indexOf (this childWithFocus).model) true (a Uniform))
+		)
+		(a Behavior
+			event=(a Keyboard.Typed) action=
+			'(let [has Text c = (((this keyboard) getLastCharacterTyped) toText)]
+				(if (c isEquivalentTo "\n")
+					(this insertAndFocusOnOverTime 
+						(if (((children itemAt caretIndex) isa BilateralView) and
+								(children itemAt caretIndex).onTheLeft) (caretIndex minus 1) caretIndex) 
+						(an EmptyStatement)
+						(a Uniform duration=150.0)
+					)
+				(if (	(c isEquivalentTo "\b") and 
+						((model itemAt caretIndex) isa EmptyStatement))
+					(this removeItemAtAndFocusOnPrevious caretIndex)
+					false
+				))
+			)
+		)
+		(a Behavior event=(this getStyle).pasteEvent action=
+			'(do
+				((this ownerOfType SelectableView).clipboard foreach 
+					(fun [refs Element item]
+						(if (item isa Statement)
+							(model insertAfterIndex caretIndex (item duplicate)))
+					)
+				)
+				true
+			)
+		)
+	] appendList super)
+.
+
+an IfView is a StatementView that
+
+	has If model = ?
+
+	refs Statement focus = nothing
+
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this bottommostChildsBottom)
+
+	has List<View> children = [
+		(a ConditionView)
+		(a StatementBodyView children = [(model.@then toView)])
+		(an ElseView)
+		(a ElseStatementView)
+	]
+
+	a ConditionView is a BaselinedHeader that
+
+		has Real left <- 
+			(cond
+				((model.owner isa If) and (model.owner.else is model))
+					((model.owner.elseKeyword getFirstView).right plus 3.0)
+				true 0.0
+			)
+			
+		has Real top = 0.0
+
+		has List<View> children = [
+			(model.@keyword toView)
+			(model.@left toView)
+			(model.@condition toView)
+			(model.@right toView)
+		]
+		
+		has List<Behavior> behaviors = ([
+			(a Behavior event=(a Keyboard.Typed character=`\n`)
+				action='
+					(if (model.then isa Block)
+						(do
+							(model.then.statements insertOverTime (an EmptyStatement) (a FastToSlow))
+							(enclosing focusOnModel (model.then.statements first))
+						)
+						false
+					)
+			)
+			(a Behavior event=(a Keyboard.Pressed key="up" meta=true)
+				action=
+					'(if (model.owner isa List)
+						(let [refs Element previousItem = (model.owner itemBefore model)]
+							(if (previousItem is nothing) 
+								false
+								(do
+									(model.owner remove previousItem)
+									(model.then.statements insertOverTime previousItem (a FastToSlow))
+									true
+								)
+							)
+						)
+						false
+					)
+			)
+			(a Behavior event=(a Keyboard.Pressed key="down" meta=true)
+				action=
+					'(if (model.owner isa List)
+						(let [refs Element firstItem = (model.then.statements first)]
+							(if (firstItem is nothing) 
+								false
+								(do
+									(model.then.statements remove firstItem)
+									(model.owner insertBefore model firstItem)
+									true
+								)
+							)
+						)
+						false
+					)
+			)
+		] appendList super)
+
+	.
+		
+	an ElseView is a BaselinedHeader that
+
+		has Real left = 0.0
+		has Real top <- 
+			(cond
+				(model.else is nothing) 0.0
+				((this getPreviousSibling) is nothing) 0.0 
+				true ((this getPreviousSibling).bottom plus 3.0)
+			)
+
+		has Bool hidden <- (model.else is nothing)
+		has Real scale <- (if hidden 0.0 1.0)
+		has List<View> children = [(model.@elseKeyword toView)]
+	
+	.
+	
+	an ElseStatementView is a BaselinedHeader that
+
+		has Real left <- 
+			(cond
+				(model.else is nothing) 0.0
+				(model.else isa If) 0.0 
+				(model.else isa Block) 0.0
+				(width greaterThan 100.0) (this getStyle).indentation
+				((this getPreviousSibling) is nothing) 0.0
+				true ((this getPreviousSibling).right plus 3.0)
+			)
+
+		has Real top <-
+			(cond
+				(model.else is nothing) 0.0
+				((this getPreviousSibling) is nothing) 0.0
+				(model.else isa If) (this getPreviousSibling).top
+				((model.else isa Block) or (width greaterThan 100.0)) ((this getPreviousSibling).bottom plus 3.0)
+				true (this getPreviousSibling).top
+			)
+
+		has Bool hidden <- (model.else is nothing)
+		has Real scale <- (if hidden 0.0 1.0)
+		has List<View> children = [(model.@else toView)]
+	
+	. 
+			
+.
+
+a WhileView is a StatementView that
+
+	has While model = ?
+	
+	has List<View> children = [
+		(a ConditionView) 
+		(a StatementBodyView children = [(model.@body toView)])
+	]
+
+	a ConditionView is a BaselinedHeader that
+
+		has List<View> children = [
+			(model.@keyword toView)
+			(model.@left toView) 
+			(model.@condition toView)
+			(model.@right toView)
+		]
+		
+		has List<Behavior> behaviors = ([
+			(a Behavior event=(a Keyboard.Typed character=`\n`)
+				action='
+					(if (model.body isa Block)
+						(do
+							(model.body.statements insertOverTime (an EmptyStatement) (a Uniform))
+							(enclosing focusOnModel (model.body.statements first))
+						)
+						false
+					)
+			)
+		] appendList super)
+		
+	.
+	
+.
+
+a ForView is a StatementView that
+
+	has For model = ?
+	
+	has List<View> children = [
+		(a ForBaselinedHeader) 
+		(a StatementBodyView children = [(model.@body toView)])
+	]
+
+	a ForBaselinedHeader is a BaselinedHeader that
+	
+		has List<View> children = [
+			(model.@keyword toView)
+			(a DelimiterView text="(") 
+			(model.@init toView)
+			(a DelimiterView text=";") 
+			(model.@condition toView)
+			(a DelimiterView text=";") 
+			(model.@update toView)
+			(a DelimiterView text=")")
+		]	
+
+		has List<Behavior> behaviors = ([
+			(a Behavior event=(a Keyboard.Typed character=`\n`)
+				action='
+					(if (model.body isa Block)
+						(do
+							(model.body.statements insertOverTime (an EmptyStatement) (a Uniform))
+							(enclosing focusOnModel (model.body.statements first))
+						)
+						false
+					)
+			)
+		] appendList super)
+
+	.
+	
+	has List<Behavior> behaviors = ([
+		(a Behavior event=(a Keyboard.Typed character=`\b`) action=
+			'(if ((model.condition isa Identifier) and 
+					(model.condition.name isEmpty)
+					(model.body isa EmptyStatement)) 
+				(this replaceAndFocusOn (an ExpressionStatement expr=(a Identifier token="for")) "expr")
+				false
+			)
+		)
+		(a Behavior event=(a Keyboard.Typed character=`:`) action=
+			'(this replaceAndFocusOn (an EnhancedFor) "var")
+		)		
+	] appendList super)
+	
+
+.
+
+an EnhancedForView is a StatementView that
+
+	has EnhancedFor model = ?
+
+	has List<View> children = [
+		(a ForBaselinedHeader) 
+		(model.@body toView)
+	]
+
+	a ForBaselinedHeader is a BaselinedHeader that
+	
+		has List<View> children = [
+			(model.@keyword toView)
+			(a DelimiterView text="(") 
+			(model.@var toView)
+			(a DelimiterView text=":") 
+			(model.@iterable toView)
+			(a DelimiterView text=")")
+		]	
+
+		has List<Behavior> behaviors = ([
+			(a Behavior event=(a Keyboard.Typed character=`\n`)
+				action='
+					(if (model.body isa Block)
+						(do
+							(model.body.statements insertOverTime (an EmptyStatement) (a Uniform))
+							(enclosing focusOnModel (model.body.statements first))
+						)
+						false
+					)
+			)
+		] appendList super)
+
+	.
+
+.
+
+
+an ExpressionStatementView is a StatementView that
+
+	has ExpressionStatement model = ?
+	has List<View> children = [(model.@expr toView) (model.@semicolon toView)]
+
+.
+
+a ReturnView is a StatementView that
+
+	refs Return model = ?
+
+	has List<View> children = [
+		(model.@return toView)
+		(a ReturnExpressionView)
+		(model.@semicolon toView)
+	]
+	
+	an ReturnExpressionView is a BaselinedHeader that
+	
+		has Bool hidden <- (model.expr is nothing)
+		has Real scale <- (if hidden 0.0 1.0)
+	
+		has List<View> children = [
+			(model.@expr toView)
+		]
+			
+	.
+
+.
+
+######################
+# Types
+######################
+
+a ReferenceTypeView is a BaselinedElementView that
+
+	refs ReferenceType model = ?
+	has List<View> children = [(model.@type toView)]
+.

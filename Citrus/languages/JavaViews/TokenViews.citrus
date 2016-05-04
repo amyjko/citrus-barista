@@ -1,0 +1,280 @@
+language JavaViews
+
+uses "Java"
+uses "Barista"
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.paints"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.transitions"
+uses "edu.cmu.hcii.citrus.views.behaviors"
+
+######################
+# Names
+######################
+
+a IdentifierView is a TokenView that
+
+	has Identifier model = ?
+	
+	has FontFace font <- 
+		(cond
+			(model.identifierType isEquivalentTo Identifier.DECLARATION) (this getStyle).declarationFont
+			(model.identifierType isEquivalentTo Identifier.TYPE) (this getStyle).typeReferenceFont
+			true (this getStyle).identifierFont
+		)
+
+	has List<View> children = [
+		(a TokenFieldWithLabel
+			color=(this getStyle).identifierColor
+			font=font
+			foreground=[errorPaint]
+			property=model.@token
+		)
+		(a WhitespaceToTheRightField font=font property=model.@whitespace)
+	]
+
+#	font=(this getStyle).packageReferenceFont 
+#	font=(this getStyle).variableReferenceFont 
+#	font=(this getStyle).methodReferenceFont
+#	font=(this getStyle).typeReferenceFont 
+
+	has Paint errorPaint = (an ErrorLine)
+	has static Bool showBindingErrors = false
+
+	an ErrorLine is a LinePaint that
+
+		has Real x1 = 0.0 
+		has Real x2 <- (if (showBindingErrors and (model.binding is nothing)) 1.0 0.0) 
+		has Real y1 = 1.0
+		has Real y2 = 1.0
+		has Color primaryColor = (enclosing getStyle).bindingErrorColor
+		has Real alpha <- (if (model.binding is nothing) 1.0 0.0)
+
+	.
+	
+.
+
+#################################################################
+# Currently used to represent a delimiter inside of a token view
+#################################################################
+a DelimiterView is a Label that
+
+	has FontFace font = (this getStyle).delimiterFont
+
+	fun Real getMaxChildAscent [] font.ascent
+.
+
+#################################################################
+# Used to represent all literals
+#################################################################
+a LiteralView is a TokenView that
+
+	has Literal model = ?
+	
+	has FontFace font = (this getStyle).literalFont
+
+	has List<View> children = [
+		(a TokenField
+			font=font
+			color=(this getStyle).literalColor
+			property=model.@token
+		)
+		(a WhitespaceToTheRightField font=font property=model.@whitespace)
+	]
+	
+.
+
+an ExpressionDelimiterView is a TokenView that
+
+	refs Delimiter model = ?
+
+	has FontFace font=(this getStyle).delimiterFont
+
+	has List<View> children = [
+		(a TokenField 
+			font=font
+			color=(this getStyle).delimiterColor
+			property=model.@token
+		)
+		(a WhitespaceToTheRightField font=font property=model.@whitespace)
+	]
+
+.
+
+a DotView is an ExpressionDelimiterView that
+
+	refs Dot model = ?
+.
+
+a SemiColonView is an ExpressionDelimiterView that
+
+	refs SemiColon model = ?
+
+	has List<View> children = [
+		(a TokenField 
+			color=(this getStyle).delimiterColor
+			property=model.@token
+		)
+		(a WrapWhitespace property=model.@whitespace)
+	]
+
+	has Real width <- ((children first).right max (children second).right)
+	has Real height <- ((children first).bottom max (children second).bottom)
+
+.
+
+a PairedExpressionDelimiterView is an ExpressionDelimiterView that
+
+	has List<View> children = [
+		(a PairedDelimiterField 
+			color=(this getStyle).delimiterColor
+			property=model.@token
+		)
+		(a WrapWhitespace property=model.@whitespace)
+	]
+
+	
+.
+
+a LeftParenthesisView is an PairedExpressionDelimiterView that
+
+	refs LeftParenthesis model = ?
+	
+	has Real scale <-
+		(if (((this getNextSibling) is nothing) or ((this getNextSibling) isa RightParenthesisView))
+			1.0
+			(1.0 max (((this getNextSibling) paddedHeight) divide height))
+		)
+.
+
+a RightParenthesisView is an PairedExpressionDelimiterView that
+
+	refs RightParenthesis model = ?
+
+	has Real scale <-
+		(if (((this getPreviousSibling) is nothing) or ((this getPreviousSibling) isa LeftParenthesisView))
+			1.0
+			(1.0 max (((this getPreviousSibling) paddedHeight) divide height))
+		)
+.
+
+a BraceView is a PairedExpressionDelimiterView that
+
+	has Real width <- ((children first).right max (children second).right)
+	has Real height <- (children second).bottom
+.
+
+a LeftBraceView is an BraceView that
+
+	refs LeftBrace model = ?
+	
+	has List<View> children = [
+		(a PairedDelimiterField 
+			font=(this getStyle).delimiterFont
+			color=(this getStyle).delimiterColor
+			property=model.@token
+		)
+		(a IndentWhitespaceBelow property=model.@whitespace)
+	]
+
+.
+
+a RightBraceView is an BraceView that
+
+	refs RightBrace model = ?
+	has List<View> children = [
+		(a PairedDelimiterField 
+			font=(this getStyle).delimiterFont
+			color=(this getStyle).delimiterColor
+			property=model.@token
+		)
+		(a WhitespaceBelow property=model.@whitespace)
+	]
+
+.
+
+
+an OperatorView is a TokenView that
+
+	refs Operator model = ?
+
+	has List<View> children = [
+		(a TokenField 
+			font=(this getStyle).operatorFont
+			property=model.@token
+			color=(this getStyle).operatorColor
+		)
+		(a WhitespaceToTheRightField property=model.@whitespace)
+	]
+	
+.
+
+
+an KeywordView is a TokenView that
+
+	refs Keyword model = ?
+
+	has FontFace font = (this getStyle).keywordFont
+
+	has List<View> children = [
+		(a TokenField
+			font=font
+			color=(this getStyle).keywordColor
+			property=model.@token
+		)
+		(a WhitespaceToTheRightField font=font property=model.@whitespace)
+	]
+.
+
+a PrimitiveView is a TokenView that
+
+	refs Primitive model = ?
+	
+	has FontFace font = (this getStyle).primitiveFont
+
+	has List<View> children = [
+		(a TokenField
+			font=font 
+			color=(this getStyle).primitiveColor
+			property=model.@token
+		)
+		(a WhitespaceToTheRightField font=font property=model.@whitespace)
+	]
+.
+
+a ModifierView is a KeywordView that
+
+	has Modifier model = ?
+
+.
+
+a LeadingWhitespaceView is a TokenView that
+
+	has LeadingWhitespace model = ?
+	has List<View> children = [
+		(a TokenField hidden=true scale=0.0 property=model.@token)
+		(a LeadingWhitespaceField property=model.@whitespace)
+	]	
+
+.
+
+a CommentView is a BaselinedElementView that
+
+	has Comment model = ?
+	
+	has List<View> children = [
+		(a Label 
+			text="//"
+			font = (this getStyle).commentFont
+			content=[(a TextPaint layout=(a TextLayout font=font) primaryColor=(this getStyle).commentColor)]
+		)
+		(a TokenField 
+			font=(this getStyle).commentFont 
+			comment=(this getStyle).commentColor
+			property=model.@text
+		)
+	]
+.
+

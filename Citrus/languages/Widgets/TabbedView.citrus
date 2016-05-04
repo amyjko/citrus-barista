@@ -1,0 +1,133 @@
+language Widgets
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.paints"
+
+a TabbedView is a View that
+
+	has Real width <- (this parentsWidth)
+	has Real height <- (this parentsHeight)
+	has Layout layout = (a VerticalLayout)
+
+	refs View selection = nothing
+	refs Tabs tabs = (a Tabs)
+	refs Views views = (a Views)
+
+	has List<View> children = [tabs views]
+
+	# A single tab
+	a Tab is a View that
+
+		# The smaller of the label's width and the parent's width / # of tabs
+		has Real width <- (if (parent is nothing) 0.0
+					((this rightmostChildsRight) min 
+						((parent.width / (parent.children length)) minus 8.0)))
+		has Real height <- (children first).height
+		has Real hPad = 10.0
+		has Real vPad = 4.0
+
+		has Real transparency <-(if (selection is document) 1.0 0.5)
+
+		refs Document document = ?
+
+		refs View label = (a Label property=document.@name font=(this getStyle).identifierFont)
+
+		has Layout layout = (a HorizontalLayout spacing=3.0)
+		has List<View> children = [(a CloseButton) label]
+
+		has List<Paint> background = 
+			[
+			(a FilledRectanglePaint 
+				primaryColor=(a Color 255.0 255.0 255.0 255.0)
+				cornerWidth=15.0 cornerHeight=15.0 bottom=-15.0)
+			(a RectanglePaint 
+				primaryColor=(a Color 200.0 200.0 200.0 200.0)
+				cornerWidth=15.0 cornerHeight=15.0 bottom=-15.0)
+			]
+
+		has List<Behavior> behaviors = [
+			(a Behavior event=(a MouseButton.Clicked)
+				action='(do
+						(@selection set document)
+						true
+					))
+		]
+
+		a CloseButton is a View that
+
+			has List<Paint> background = [
+				(an EllipsePaint primaryColor=(a Color r=128.0 g=128.0 b=128.0))
+				(an LinePaint primaryColor=(a Color r=255.0 g=255.0 b=255.0) x1=0.25 y1=0.25 x2=.75 y2=.75)
+				(an LinePaint primaryColor=(a Color r=255.0 g=255.0 b=255.0) x1=0.25 y1=0.75 x2=.75 y2=.25)
+			]
+			has Real width = 14.0
+			has Real height = 14.0
+			has List<Behavior> behaviors = [
+				(a Behavior event=(a MousePointer.Entered)
+					action='(do (@transparency set 0.5) true))
+				(a Behavior event=(a MousePointer.Exited)
+					action='(do (@transparency set 1.0) true))
+				(a Behavior event=(a MouseButton.Clicked)
+					action='(do (this close document) true))
+			]
+		.
+
+	.
+
+	# Holds all of the tabs
+	a Tabs is a View that
+
+		has Real width <- (this parentsWidth)
+		has Real height <- ((this tallestChildsHeight) max 12.0)
+		has Layout layout = (a HorizontalLayout)
+
+		has List<Paint> background = [
+			(a FilledRectanglePaint primaryColor=(this getStyle).inactiveColor)
+			(a LinePaint primaryColor=(this getStyle).borderColor x1=0.0 y1= 1.0 x2=1.0 y2=1.0)
+		]
+
+	.
+
+	# Holds all of the scroll views
+	a Views is a View that
+
+		has Real width <- (this parentsWidth)
+		has Real height <- (if ((this getPreviousSibling) is nothing) 
+					0.0
+					((this parentsHeight) minus (this getPreviousSibling).height))
+	.
+
+	# A view that is hidden when it is not selected
+	a TabView is a ScrollView that
+
+		refs Document document = ?
+
+		refs View viewToScroll = (document.@unit toView)
+
+		has Bool hidden <- ((document is selection) not)
+		has Real width <- (this parentsWidth)
+		has Real height <- (this parentsHeight)
+	.
+
+	fun Nothing show [ refs Document newDocument ]
+	(do
+		(if ((tabs.children containsItemThat (fun [has Tab item] (item.document is newDocument))) not)
+			(do
+				(tabs.children append (a Tab document=newDocument))
+				(views.children append (a TabView document=newDocument))
+			)
+			false
+		)
+		(@selection set newDocument)
+	)
+
+	fun Nothing close [ refs Document documentToRemove]
+	(do
+		(tabs.children removeItemsThat (fun [has Tab item] (item.document is documentToRemove)))
+		(views.children removeItemsThat (fun [has TabView item] (item.document is documentToRemove)))
+	)
+
+.

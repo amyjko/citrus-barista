@@ -1,0 +1,21 @@
+language RegressionTests
+
+init
+(do
+	refs Element test = (a ListTest)
+	(test.list append "Blah item")
+	(test.list append "Last")
+	(test.list removeAll)
+)
+
+a ListTest is an Element that
+
+	has List list = []
+	
+	when event (list ItemInserted)
+		(debug event.item " inserted")
+
+	when event (list ItemRemoved)
+		(debug event.item " removed")
+
+.

@@ -1,0 +1,209 @@
+language FileEditor
+
+uses "edu.cmu.hcii.citrus.views"
+uses "edu.cmu.hcii.citrus.views.widgets"
+uses "edu.cmu.hcii.citrus.views.layouts"
+uses "edu.cmu.hcii.citrus.views.devices"
+uses "edu.cmu.hcii.citrus.views.paints"
+
+init
+(do
+	(FileEditor extractViews)
+	((a EditorWindow files = [
+		(a File name="index.txt" text=
+("I'm a Ph.D. student at the Human-Computer Interaction Institute at Carnegie Mellon University. " +
+"Between deadlines, I spend time with my caring and gorgeous wife and my wonderfully spunky daughter. I "
+"also spend a quite bit of time doing research as part of project Marmalade. My focus is on user-centered "
+"approaches to improving programmer productivity. I was recently awarded an NSF Graduate Research "
+"Fellowship and an NDSEG Fellowship to support my Ph.D. research.")
+		)
+		(a File name="ellen.txt" text=
+("September 11th, 2004. Ellen is my all-too-insightful-just-turned-three-year-old daughter. This morning I " +
+"gave her a bowl of yogurt with grapes in it, and she just ate the grapes. I asked her, why don't you "
+"eat some of the yogurt? to which she replied, Daddy, I ate the yogurt for the grapes, I didn't eat the "
+"yogurt for the yogurt. It's amazing to think that we brought her home from the hospital 3 years ago today. "
+"She just started pre-school last week and cried when she had to leave! I told her that when she graduated "
+"from pre-school, she would go into kindergarten, and would the learn the alphabet. She said, you mean the "
+"a, b, c, d, [sings the alphabet], next time won't you sing with me? Then she asked me when I was going to graduate!")
+		)
+		(a File name="projects.txt" text=
+("The Whyline is a debugging tool that allows programmers to ask Why did and Why didn't questions about their " +
+"program's output. Programmers choose from a set of questions generated automatically via static and "
+"dynamic analyses, and the tool provides answers in terms of the runtime events that caused or prevented "
+"the desired output. One unique thing about the Whyline is that it allows programmers to ask Why did about things "
+"that didn't actually occur at runtime and (and Why didn't about things that did), in order to reveal programmers' "
+"false assumptions about their program's execution. In user studies of the Whyline (prototyped in the Alice "
+"programming environment), programmers using the Whyline to debug spent a factor of 8 less time debugging the same "
+"bugs than programmers without the Whyline. Our current efforts are on generalizing the Whyline to general-purpose "
+"imperative languages, particularly Java. Whyline stands for Workspace that Helps you Link Instructions to Numbers and Events."
+)
+		)
+		(a File name="pubs.txt" text=
+("Ko, A. J. and Myers, B. A. (2005). Citrus: A Language and Toolkit for Simplifying the Creation of Structured Editors for Code and Data. UIST 2005, Seattle WA, October 23-26, 2005, to appear.\n\n" +
+"Fogarty, J., Ko, A.J., Aung, H.H., Golden, E., Tang, K.P. and Hudson, S.E. (2005). Examining Task Engagement in Sensor-Based Statistical Models of Human Interruptibility. CHI 2005: Human Factors in Computing Systems, Portland OR, April 2-7, 2005, 331-340.[official pdf]\n\n"
+"Ko, A. J., Aung, H., and Myers, B. A. (2005). Design Requirements for More Flexible Structured Editors from a Study of Programmers' Text Editing. Extended Abstracts CHI 2005: Human Factors in Computing Systems, Portland OR, April 2-7, 2005, 1557-1560. [official pdf]\n\n"
+"Ko, A. J., Aung, H., and Myers, B. A. (2005). Eliciting Design Requirements for Maintenance-Oriented IDEs: A Detailed Study of Corrective and Perfective Maintenance Tasks. To appear at the 27th International Conference on Software Engineering, St. Louis, MI, May 15-21.\n\n"
+"Ko, A. J. Myers, B. A., and Aung, H. (2004). Six Learning Barriers in End-User Programming Systems. IEEE Symposium on Visual Languages and Human-Centric Computing, Rome, Italy, September 26-29, 199-206.\n\n"
+)
+		)
+	]
+	) show)
+)
+
+a File is an Element that
+
+	has Text name = ?
+	has Text text = ?
+
+.
+
+a FileView is a ElementView that
+
+	refs File model = ?
+	has Layout layout = (a HorizontalLayout spacing=3.0)
+	has Real width <- (this lastChildsRight)
+	has Real height <- (this tallestChildsHeight)
+	has Real hPad = 5.0
+	has Real vPad = 3.0
+	has static FontFace font = (a FontFace family="Arial" size=14.0)
+	has List<View> children = [
+		(a Box) (a Label text=model.name font=FileView.font)
+	]
+	has Bool selected <- (if ((this ownerOfType EditorWindow) is nothing) false
+									((this ownerOfType EditorWindow).selection is model))
+
+	has static Paint selection = (a SelectionPaint)
+	has List<View> background = [(a SelectionPaint)]
+	a SelectionPaint is a FilledRectanglePaint that
+	
+		has Color primaryColor = (enclosing getStyle).darkColor
+		has Real alpha <- (if selected 1.0 0.0)
+	
+	.
+
+	a Box is a View that
+	
+		has Real width = 12.0
+		has Real height = 12.0
+#		has Paint box = (a FilledRectanglePaint primaryColor=(this getStyle).darkerColor)
+		has Paint box = (a ImagePaint width=12.0 image=(this getImage "FileIcon.png"))
+		has List<Paint> background = [ box ]
+		
+	.
+
+	has List<View> behaviors = [
+		(a Behavior event=(a MouseButton.Pressed) action=
+			'(do
+				((this ownerOfType EditorWindow).@selection set model)
+				true
+			)
+		)
+	]
+	
+.
+
+a FileNothingView is a ElementView that
+
+	refs Nothing<File> model = ?
+	has Real width <- (this parentsRemainingWidth)
+	has Real height <- (this parentsHeight)
+	has static FontFace font = (a FontFace family="Arial" size=14.0)
+	has List<View> children = [
+		(a Label text="No file is selected." 
+			font=FileNothingView.font
+			left<-'(((this parentsWidth) minus width) divide 2.0)
+			top<-'(((this parentsHeight) minus height) divide 2.0)	
+		)
+	]
+
+.
+
+a FileReferenceView is a ReferenceView that
+
+	refs File model = ?
+	has Real width <- (this parentsRemainingWidth)
+	has Real height <- (this parentsHeight)
+	has Layout layout = (a VerticalLayout)
+
+	refs TextField field = 
+		(a TextField 
+			property=model.@text 
+			background=[]
+			fitToWidth=true
+		)
+		
+	refs ScrollView scroller = 
+		(a ScrollView viewToScroll=field
+			height<-'(this parentsRemainingHeight)
+		)
+		
+	when event (scroller.@width ValueChanged)
+		(field.textLayout updateRightEdge ((scroller getViewer).width minus 20.0))
+
+	has List<View> children = [
+		(a Label 
+			background = [ (a FilledRectanglePaint primaryColor=(this getStyle).darkerColor) ]
+			text=model.name font=(a FontFace family="Arial" size=20.0)
+			width<-'(this parentsWidth)
+			hPad=5.0
+			vPad=5.0
+		)
+		scroller
+	]
+
+.
+
+a EditorWindow is an App that
+
+	has Real width = 300.0
+	has Real height = 200.0
+	has List<File> files = []
+
+	refs File selection = nothing
+
+	has Layout layout = (a HorizontalLayout spacing=0.0)
+	has List<View> children = [
+		(a FilesView)
+		(@selection toView)
+	]
+
+	a FilesView is a View that
+	
+		has Real width <- ((children second) paddedWidth)
+		has Real height <- (this parentsHeight)
+		has Layout layout = (a VerticalLayout)
+		has List<Paint> background = [ (a FilledRectanglePaint primaryColor=(enclosing getStyle).lighterColor) ]
+		has List<View> children = [
+			(a Label 
+				text="Files" 
+				font=(a FontFace family="Arial" size=20.0)
+				hPad=5.0
+				vPad=5.0
+				width<-'(this parentsWidth)
+				background = [ (a FilledRectanglePaint primaryColor=(enclosing getStyle).darkerColor) ]
+			) 
+			(@files toView)
+		]
+
+	.
+		
+
+.
+
+a FileListView is a ListView that
+
+	refs List<File> model = ?
+	has Layout layout = (a VerticalLayout spacing=0.0)
+	has Real width <- (this rightmostChildsRight)
+	has Real height <- (this parentsHeight)
+
+	has List<View> behaviors = [
+		(a Behavior event=(a MouseButton.Pressed) action=
+			'(do
+				((this ownerOfType EditorWindow).@selection set nothing)
+				true
+			)
+		)
+	]
+
+.	
