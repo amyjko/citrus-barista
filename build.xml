@@ -1,0 +1,24 @@
+<project>
+    <target name="clean">
+        <delete dir="build"/>
+        <delete file="Citrus.jar"/>
+    </target>
+
+    <target name="compile">
+        <mkdir dir="build/classes"/>
+        <javac srcdir="." includes="edu/**,Citrus.java" destdir="build/classes"/>
+    </target>
+
+    <target name="jar">
+        <jar destfile="Citrus.jar" basedir="build/classes">
+            <manifest>
+                <attribute name="Main-Class" value="Citrus"/>
+            </manifest>
+        </jar>
+    </target>
+
+    <target name="run">
+        <java jar="Citrus.jar" fork="true"/>
+    </target>
+
+</project>
