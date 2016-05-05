@@ -23,7 +23,7 @@
  */
 package edu.cmu.hcii.citrus;
 
-public class NewSet<ItemType> extends Expression<Set<ItemType>> {
+public class NewSet<ItemType extends Element> extends Expression<Set<ItemType>> {
 
 	// The item expressions to be evaluated and inserted into a new list
 	public static final BootDec<List<Element<?>>> items = new BootDec<List<Element<?>>>(new List());

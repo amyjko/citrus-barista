@@ -29,7 +29,7 @@ import java.util.LinkedList;
 
 import edu.cmu.hcii.citrus.views.Transition;
 
-public class List<ItemType extends Element<?>> extends Group<List<ItemType>, ItemType> {
+public class List<ItemType extends Element> extends Group<List<ItemType>, ItemType> {
 
 	private boolean shouldRecord() { 
 		

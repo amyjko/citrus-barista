@@ -30,7 +30,7 @@ import edu.cmu.hcii.citrus.*;
 
 // Paint can paint, given a AWT graphics context, and can return the boundaries in which it paints.
 // It's also required to manually register a property listener as listener to all of its properties.
-public abstract class Paint extends BaseElement<Paint> {
+public abstract class Paint extends Expression<Paint> {
 	
 	public static final Dec<Real> alpha = new Dec<Real>(new Real(1.0));
 	static {
@@ -81,6 +81,8 @@ public abstract class Paint extends BaseElement<Paint> {
 		return getPropertyByDeclaration(declaration).getVisible().value;
 		
 	}
+
+	public Paint evaluate(Element<?> el) { return this; }
 
 	public abstract void paint(Graphics2D g, View v, double l, double t, double r, double b);
 	

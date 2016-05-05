@@ -65,7 +65,7 @@ public class GroupView extends ElementView {
 		
 		List<View> oldChildren = get(children);
 		List<View> newChildren = new List<View>();
-		Iterator<Property> propertyIterator = (Iterator<Property>)get(model).propertyIterator();
+		Iterator<Property> propertyIterator = (Iterator<Property>)(Iterator)get(model).propertyIterator();
 		while(propertyIterator.hasNext()) {
 			
 			Property property = propertyIterator.next();

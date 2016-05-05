@@ -505,7 +505,7 @@ public class CitrusParser {
 	
 	public static Dec rule(TokenList tokens) {
 
-		Dec<?> newDeclaration = new Dec();
+		Dec newDeclaration = new Dec();
 		
 		// Eat "has", "refs", or "rule"
 		String tok = tokens.eat(TokenType.NAME);
@@ -522,7 +522,7 @@ public class CitrusParser {
 		newDeclaration.set(Dec.valueExpression, (Expression)code(tokens));
 
 		// This value must be true.
-		PropertyRestriction<?> newRestriction = new PropertyRestriction();
+		PropertyRestriction newRestriction = new PropertyRestriction();
 		newRestriction.set(PropertyRestriction.condition, new Ref(newDeclaration.text(Dec.name)));
 		
 		// Is there an otherwise? If so, read it.
