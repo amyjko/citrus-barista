@@ -670,7 +670,7 @@ public class Window extends View {
 	// If there's any damage, repaint inside of the damaged area.	
 	public void repairDamagedArea() {
 		
-		synchronized(damagedArea) {
+		synchronized(this) {
 		
 		if(damagedArea != null) {	
 
