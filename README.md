@@ -1,3 +1,4 @@
+[![No Maintenance Intended](http://unmaintained.tech/badge.svg)](http://unmaintained.tech/)
 # Citrus and Barista
 
 Citrus is a programming language a programming language that supports one way constraints, events, value restrictions, and object ownership. I used Citrus to implement the Barista user interface toolkit, which supports the construction of text-editable structured editors.
