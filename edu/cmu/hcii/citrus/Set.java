@@ -29,7 +29,7 @@ import java.util.Iterator;
 
 import edu.cmu.hcii.citrus.views.Transition;
 
-public class Set<ItemType extends Element<?>> extends Group<Set<ItemType>,ItemType> implements Iterable<ItemType> {
+public class Set<ItemType extends Element> extends Group<Set<ItemType>,ItemType> implements Iterable<ItemType> {
 
 	public final HashSet<Property<ItemType>> items = new HashSet<Property<ItemType>>();
 	

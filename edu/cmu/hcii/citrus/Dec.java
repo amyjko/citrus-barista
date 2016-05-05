@@ -46,7 +46,7 @@ public class Dec<ValueType extends Element> extends Expression<DecInterface> imp
 	// This is the result of evaluating the declaration's value restriction expression.
 	// Note that it currently isn't a List because in Property.java we check to
 	// see if the result of validation is a restriction to know if there was a violation.
-	public Vector<PropertyRestriction> restrictions = new Vector<PropertyRestriction>(4);
+	public Vector<PropertyRestriction<ValueType>> restrictions = new Vector<PropertyRestriction<ValueType>>(4);
 
 	// Runtime constructors
 	public Dec() { super(); replaceValueFunctionDeclaration(); }
@@ -128,7 +128,7 @@ public class Dec<ValueType extends Element> extends Expression<DecInterface> imp
 		}
 
 		// Then validate this declaration.
-		Iterator<PropertyRestriction<ValueType>> i = (Iterator<PropertyRestriction<ValueType>>)restrictions.iterator();
+		Iterator<PropertyRestriction<ValueType>> i = restrictions.iterator();
 		while(i.hasNext()) {
 			
 			PropertyRestriction<ValueType> vs = i.next();

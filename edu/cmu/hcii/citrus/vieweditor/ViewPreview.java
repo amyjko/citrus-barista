@@ -188,7 +188,7 @@ public class ViewPreview extends View {
 							
 						} else {
 							
-							List newItems = childrenDeclaration.get(Dec.valueExpression).get(NewList.items);
+							List newItems = (List)childrenDeclaration.get(Dec.valueExpression).get(NewList.items);
 							System.err.println("Currently has items " + newItems);
 
 							// Where was it dropped, relative to the tile being dropped over?
