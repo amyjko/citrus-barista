@@ -3,7 +3,7 @@
 
 Citrus is a programming language a programming language that supports one way constraints, events, value restrictions, and object ownership. I used Citrus to implement the Barista user interface toolkit, which supports the construction of text-editable structured editors.
 
-To see a demo of both, check out the [Citrus](https://www.youtube.com/watch?v=bP9iS5jtRiQ) and [Barista]([https://www.youtube.com/watch?v=gAxjUh9d2YI](https://www.youtube.com/watch?v=rR8glIsliSo&t=2s)) YouTube videos.
+To see a demo of both, check out the [Citrus](https://www.youtube.com/watch?v=bP9iS5jtRiQ) and [Barista](https://www.youtube.com/watch?v=rR8glIsliSo&t=2s) YouTube videos.
 
 ## History
 
